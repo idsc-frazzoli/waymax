@@ -98,9 +98,9 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
     is_road_edge = datatypes.is_road_edge(state.roadgraph_points.types)
     edge_points = state.roadgraph_points.xy[is_road_edge & state.roadgraph_points.valid]
     if len(sdc_xy_curr.shape) == 1: # no batch dimension
-      distance_to_edge = calculate_edge_distances(sdc_xy_curr, sdc_yaw_curr, edge_points)
+      distance_to_edge = calculate_distances_to_boundary(sdc_xy_curr, sdc_yaw_curr, edge_points)
     else:
-      distance_to_edge = jax.vmap(calculate_edge_distances, in_axes=(0, 0, 0))(sdc_xy_curr, sdc_yaw_curr, edge_points)
+      distance_to_edge = jax.vmap(calculate_distances_to_boundary, in_axes=(0, 0, 0))(sdc_xy_curr, sdc_yaw_curr, edge_points)
       
     return state
   def check_termination(self, state: PlanningAgentSimulatorState) -> jnp.ndarray:
@@ -119,73 +119,34 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
     # return jnp.zeros(state.shape, dtype=jnp.bool_)
   
 
-def point_to_line_distance(point, line_point, direction):
+def calculate_distances_to_boundary(car_position, car_yaw, boundary_points, num_rays=8, max_distance=0.15):
     """
-    Calculate the perpendicular distance from a point to a line.
-    Args:
-      point: Array of (x, y) coordinates of the point.
-      line_point: Array of (x, y) coordinates of a point on the line.
-      direction: Array of (dx, dy) representing the direction of the line.
-    Return: 
-      Tuple of perpendicular distance and projection length from the point to the line.
-    """
-    # Vector from the line point to the point
-    vector = point - line_point
-    
-    # Project the vector onto the direction
-    projection_length = jnp.dot(vector, direction) / jnp.linalg.norm(direction)
-    projection = projection_length * direction / jnp.linalg.norm(direction)
-    
-    # Calculate the perpendicular vector
-    perpendicular = vector - projection
-    
-    # Return the norm of the perpendicular vector (distance) and the projection length
-    return jnp.linalg.norm(perpendicular), projection_length
-
-def calculate_edge_distances(car_position, car_orientation, edge_points, num_rays: int = 8, max_distance: float=0.5):
-    """
-    Calculate approximate distances from the car to the edge points in specified directions.
+    calculate distances to boundary in different directions
     
     Args:
-      car_position: Tuple of (x, y) coordinates of the car.
-      car_orientation: Angle in radians representing the car's orientation.
-      edge_points: Array of shape (n, 2) representing the edge points.
-      angles: List of angles (in radians) relative to the car's orientation to cast rays.
-      max_distance: Maximum distance to consider for filtering points.
-    Return: 
-      List of approximate distances from the car to the edges along the specified angles.
+    car_position: car position (x, y)  shape (2,)
+    car_yaw: car orientation in radians
+    boundary_points: boundary points of the track    shape (N, 2)
+    num_rays: number of rays to cast
+    
+    Returns:
+    distances: distance to boundary in different directions    shape (num_rays,)
+    hit_points: points of intersections of rays and boundary    shape (num_rays, 2)
     """
-    car_pos = jnp.array(car_position)
-    edge_points = jnp.array(edge_points)
 
-    # Generate angles based on the number of rays
-    angles = jnp.linspace(-jnp.pi / 2, jnp.pi / 2, num=num_rays)
+    angles = jnp.linspace(-jnp.pi/2, jnp.pi/2, num_rays)
+
+    ray_directions = jnp.array([jnp.cos(car_yaw + angles), jnp.sin(car_yaw + angles)]) # (2, num_rays)
+
+    relative_positions = boundary_points - car_position # (N, 2)
+    projections = jnp.dot(relative_positions, ray_directions) # (N, num_rays)
+    distances_to_points = jnp.linalg.norm(relative_positions, axis=1, keepdims=True)  # (N, 1)
+    perpendicular_distances = jnp.sqrt(distances_to_points**2 - projections**2)  # (N, num_rays)
     
-    def distance_for_angle(angle):
-        direction = jnp.array([jnp.cos(car_orientation + angle), jnp.sin(car_orientation + angle)])
-        
-        # Vectorize the point_to_line_distance function
-        vectorized_point_to_line_distance = jax.vmap(point_to_line_distance, in_axes=(0, None, None))
-        perpendicular_distances, projection_lengths = vectorized_point_to_line_distance(edge_points, car_pos, direction)
-        
-        # Filter points within the max distance and in front of the car
-        valid_indices = (perpendicular_distances <= max_distance) & (projection_lengths >= 0)
-        
-        if not jnp.any(valid_indices):
-            return jnp.inf
-        
-        valid_points = edge_points[valid_indices]
-        
-        # Calculate distances from the car to the valid edge points
-        valid_distances = jnp.linalg.norm(valid_points - car_pos, axis=1)
-        
-        return jnp.min(valid_distances)
+    valid_mask = (projections > 0) & (perpendicular_distances < max_distance)  
+    valid_projections = jnp.where(valid_mask, projections, jnp.inf)  # (N, num_rays)
+
+    distances = jnp.min(valid_projections, axis=0) # (num_rays,)
+    hit_points = car_position + ray_directions.T * distances[:, None] # (num_rays, 2)
     
-    # Vectorize the distance calculation for all angles
-    distance_for_angles = jax.vmap(distance_for_angle)
-    distances = distance_for_angles(angles)
-    
-    # Convert distances back to a Python list and replace jnp.inf with None
-    distances = [None if d == jnp.inf else d for d in distances]
-    
-    return distances
+    return distances, hit_points
