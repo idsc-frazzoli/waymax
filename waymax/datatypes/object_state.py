@@ -290,6 +290,76 @@ class Trajectory:
         ],
     )
 
+@chex.dataclass
+class GoKartTrajectory(Trajectory):
+  yaw_rate: jax.Array
+
+  @classmethod
+  def zeros(cls, shape: Sequence[int]) -> 'GoKartTrajectory':
+    """Creates a Trajectory containing zeros of the specified shape."""
+    return cls(
+        x=jnp.zeros(shape, jnp.float32),
+        y=jnp.zeros(shape, jnp.float32),
+        z=jnp.zeros(shape, jnp.float32),
+        vel_x=jnp.zeros(shape, jnp.float32),
+        vel_y=jnp.zeros(shape, jnp.float32),
+        yaw=jnp.zeros(shape, jnp.float32),
+        yaw_rate=jnp.zeros(shape, jnp.float32),
+        valid=jnp.zeros(shape, jnp.bool_),
+        length=jnp.zeros(shape, jnp.float32),
+        width=jnp.zeros(shape, jnp.float32),
+        height=jnp.zeros(shape, jnp.float32),
+        timestamp_micros=jnp.zeros(shape, jnp.int32),
+    )
+
+  def validate(self):
+    """Validates shape and type."""
+    chex.assert_equal_shape([
+        self.x,
+        self.y,
+        self.z,
+        self.vel_x,
+        self.vel_y,
+        self.yaw,
+        self.yaw_rate,
+        self.valid,
+        self.timestamp_micros,
+        self.length,
+        self.width,
+        self.height,
+    ])
+    chex.assert_type(
+        [
+            self.x,
+            self.y,
+            self.z,
+            self.vel_x,
+            self.vel_y,
+            self.yaw,
+            self.yaw_rate,
+            self.valid,
+            self.timestamp_micros,
+            self.length,
+            self.width,
+            self.height,
+        ],
+        [
+            jnp.float32,
+            jnp.float32,
+            jnp.float32,
+            jnp.float32,
+            jnp.float32,
+            jnp.float32,
+            jnp.float32,
+            jnp.bool_,
+            jnp.int32,
+            jnp.float32,
+            jnp.float32,
+            jnp.float32,
+        ],
+    )
+
+
 
 def fill_invalid_trajectory(traj: Trajectory) -> Trajectory:
   """Fills a trajectory with invalid values.

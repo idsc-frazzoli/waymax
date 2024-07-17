@@ -141,8 +141,8 @@ class TricycleModel(DynamicsModel):
   def compute_update(
       self,
       action: datatypes.Action,
-      trajectory: datatypes.Trajectory,
-  ) -> datatypes.TrajectoryUpdate:
+      trajectory: datatypes.GoKartTrajectory,
+  ) -> datatypes.GoKartTrajectoryUpdate:
     """Computes the pose and velocity updates at timestep.
 
     Args:
@@ -175,8 +175,8 @@ class TricycleModel(DynamicsModel):
     vel_x = trajectory.vel_x  
     vel_y = trajectory.vel_y
     yaw = trajectory.yaw
-    # yaw_rate = trajectory.yaw_rate
-    yaw_rate = jnp.zeros_like(vel_x)
+    yaw_rate = trajectory.yaw_rate
+    # yaw_rate = jnp.zeros_like(vel_x)
     state = jnp.concatenate((x, y, vel_x, vel_y, yaw, yaw_rate), axis=-1)
 
     # Vectorize _RK4_update function along batch and num_objects dimensions
@@ -187,12 +187,13 @@ class TricycleModel(DynamicsModel):
 
     new_states = rk4_vmap(action.data, state, t)
     
-    return datatypes.TrajectoryUpdate(
+    return datatypes.GoKartTrajectoryUpdate(
         x=new_states[..., 0:1],
         y=new_states[..., 1:2],
         yaw=geometry.wrap_yaws(new_states[..., 4:5]),
         vel_x=new_states[..., 2:3],
         vel_y=new_states[..., 3:4],
+        yaw_rate=new_states[..., 5:6],
         valid=trajectory.valid & action.valid,
     )
   def _dynamics(self, action: jax.Array, state: jnp.ndarray,):

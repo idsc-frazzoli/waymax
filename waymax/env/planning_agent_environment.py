@@ -146,7 +146,7 @@ class PlanningAgentDynamics(_dynamics.DynamicsModel):
 
 
 @chex.dataclass
-class PlanningAgentSimulatorState(datatypes.SimulatorState):
+class PlanningAgentSimulatorState(datatypes.GoKartSimState):
   """Simulator state for the planning agent environment.
 
   Attributes:
@@ -192,7 +192,7 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
         `sim_agent_actors` which are added in the step function.
     """
     self._planning_agent_dynamics = PlanningAgentDynamics(dynamics_model)
-    self._state_dynamics = _dynamics.StateDynamics()
+    self._state_dynamics = _dynamics.GoKartStateDynamics()
     self._reward_function = rewards.LinearCombinationReward(config.rewards)
     self.config = config
     if config.controlled_object != _config.ObjectType.SDC:

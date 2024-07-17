@@ -19,4 +19,4 @@ from waymax.dynamics.delta import DeltaGlobal
 from waymax.dynamics.delta import DeltaLocal
 from waymax.dynamics.discretizer import DiscreteActionSpaceWrapper
 from waymax.dynamics.discretizer import Discretizer
-from waymax.dynamics.state_dynamics import StateDynamics
+from waymax.dynamics.state_dynamics import StateDynamics, GoKartStateDynamics

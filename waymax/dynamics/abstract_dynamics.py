@@ -22,7 +22,7 @@ import jax.numpy as jnp
 
 from waymax import datatypes
 
-CONTROLLABLE_FIELDS = ['x', 'y', 'yaw', 'vel_x', 'vel_y']
+CONTROLLABLE_FIELDS = ['x', 'y', 'yaw', 'vel_x', 'vel_y', 'yaw_rate']
 
 
 class DynamicsModel(abc.ABC):

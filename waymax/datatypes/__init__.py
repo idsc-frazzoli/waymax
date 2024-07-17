@@ -16,6 +16,7 @@
 
 from waymax.datatypes.action import Action
 from waymax.datatypes.action import TrajectoryUpdate
+from waymax.datatypes.action import GoKartTrajectoryUpdate
 from waymax.datatypes.array import MaskedArray
 from waymax.datatypes.array import PyTree
 from waymax.datatypes.constant import TIME_INTERVAL
@@ -24,6 +25,7 @@ from waymax.datatypes.object_state import fill_invalid_trajectory
 from waymax.datatypes.object_state import ObjectMetadata
 from waymax.datatypes.object_state import ObjectTypeIds
 from waymax.datatypes.object_state import Trajectory
+from waymax.datatypes.object_state import GoKartTrajectory
 from waymax.datatypes.observation import ObjectPose2D
 from waymax.datatypes.observation import Observation
 from waymax.datatypes.observation import observation_from_state
@@ -48,6 +50,7 @@ from waymax.datatypes.roadgraph import RoadgraphPoints
 from waymax.datatypes.route import Paths
 from waymax.datatypes.simulator_state import get_control_mask
 from waymax.datatypes.simulator_state import SimulatorState
+from waymax.datatypes.simulator_state import GoKartSimState
 from waymax.datatypes.simulator_state import update_state_by_log
 from waymax.datatypes.traffic_lights import TrafficLights
 from waymax.datatypes.traffic_lights import TrafficLightStates
