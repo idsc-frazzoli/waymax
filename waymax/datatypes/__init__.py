@@ -48,6 +48,7 @@ from waymax.datatypes.roadgraph import is_road_edge
 from waymax.datatypes.roadgraph import MapElementIds
 from waymax.datatypes.roadgraph import RoadgraphPoints
 from waymax.datatypes.route import Paths
+from waymax.datatypes.route import GoKartPaths
 from waymax.datatypes.simulator_state import get_control_mask
 from waymax.datatypes.simulator_state import SimulatorState
 from waymax.datatypes.simulator_state import GoKartSimState

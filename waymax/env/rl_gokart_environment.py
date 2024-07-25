@@ -61,13 +61,23 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
 
     Returns:
       Simulator state as an observation without modifications of shape (...).
+      sdc_xy_curr: cuurent position of the self-driving car in the global coordinate system
+      sdc_vel_curr: current velocity of the self-driving car in the go-kart coordinate system
+      dir_diff: difference between the current orientation of the self-driving car and the orientation of the nearest point on the track
+      distance_to_edge: distance to the track boundary in different directions
     """
     # shape: (..., num_objects, timesteps=1, 2) -> (..., num_objects, 2)
     pos_xy = state.current_sim_trajectory.xy[..., 0, :]
+    vel_xy = state.current_sim_trajectory.vel_xy[..., 0, :]
 
     # shape: (...,2)
     sdc_xy_curr = datatypes.select_by_onehot(
         pos_xy,
+        state.object_metadata.is_sdc,
+        keepdims=False,
+    )
+    sdc_vel_curr = datatypes.select_by_onehot(
+        vel_xy,
         state.object_metadata.is_sdc,
         keepdims=False,
     )
@@ -95,14 +105,40 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         keepdims=False,
     )
 
+    # Distance from the current sdc position to all the points on sdc_paths (here centerline)
+    # Shape: (..., num_paths, num_points_per_path) our case: num_paths=1
+    dist_raw = jnp.linalg.norm(
+        state.sdc_paths.xy - jnp.expand_dims(sdc_xy_curr, axis=(-2, -3)),
+        axis=-1,
+        keepdims=False,
+    )
+    # Only consider valid on-route paths.
+    dist = jnp.where(state.sdc_paths.valid & state.sdc_paths.on_route, dist_raw, jnp.inf)
+    # Only consider valid SDC states. # shape: (..., num_paths, num_points_per_path)
+    dist = jnp.where(
+        jnp.expand_dims(sdc_valid_curr, axis=(-1, -2)), dist, jnp.inf
+    )
+    
+    idx = jnp.argmin(dist, axis=-1, keepdims=True)  # (..., num_paths=1, 1)
+
+    # use the direction of the nearest sdc_path point as referece direction
+    dir_ref = jnp.take_along_axis(state.sdc_paths.dir_xy, idx[..., None], axis=-2)  # (..., num_paths=1, 1, 2)
+    dir_ref = jnp.squeeze(dir_ref, axis=(-2,-3))  # (...,2)
+
+    dir_ref = jnp.arctan2(dir_ref[1], dir_ref[0])  # (...,)
+    dir_diff = sdc_yaw_curr - dir_ref  # (...,)
+    dir_diff = dir_diff[..., None] # (..., 1)
+
     is_road_edge = datatypes.is_road_edge(state.roadgraph_points.types)
     edge_points = state.roadgraph_points.xy[is_road_edge & state.roadgraph_points.valid]
     if len(sdc_xy_curr.shape) == 1: # no batch dimension
-      distance_to_edge = calculate_distances_to_boundary(sdc_xy_curr, sdc_yaw_curr, edge_points)
+      distance_to_edge, _ = calculate_distances_to_boundary(sdc_xy_curr, sdc_yaw_curr, edge_points)
     else:
-      distance_to_edge = jax.vmap(calculate_distances_to_boundary, in_axes=(0, 0, 0))(sdc_xy_curr, sdc_yaw_curr, edge_points)
-      
-    return state
+      distance_to_edge, _ = jax.vmap(calculate_distances_to_boundary, in_axes=(0, 0, 0))(sdc_xy_curr, sdc_yaw_curr, edge_points)
+    
+    obs = jnp.concatenate([sdc_vel_curr, dir_diff, distance_to_edge], axis=-1) ## add information of the track? + yaw rate
+    return obs
+  
   def check_termination(self, state: PlanningAgentSimulatorState) -> jnp.ndarray:
     """Checks if the episode should terminate.
 
@@ -111,12 +147,12 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
 
     Returns:
       A boolean array of shape (...) indicating if the episode should terminate.
+      reset the episode if the self-driving car is off-road or the episode is done
     """
     metric_dict = self.metrics(state)
-    is_offroad = metric_dict["offroad"].squeeze(-1)
-    if is_offroad == 1.0:
+    is_offroad = metric_dict["offroad"].value.astype(jnp.bool)
+    if is_offroad | state.is_done:
        self.reset(state)
-    # return jnp.zeros(state.shape, dtype=jnp.bool_)
   
 
 def calculate_distances_to_boundary(car_position, car_yaw, boundary_points, num_rays=8, max_distance=0.15):

@@ -115,3 +115,13 @@ class Paths:
             jnp.bool_,
         ],
     )
+
+@chex.dataclass
+class GoKartPaths(Paths):
+  dir_x: jax.Array
+  dir_y: jax.Array
+
+  @property
+  def dir_xy(self) -> jax.Array:
+    """Stacked xy direction for all points."""
+    return jnp.stack([self.dir_x, self.dir_y], axis=-1)

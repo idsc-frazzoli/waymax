@@ -74,7 +74,7 @@ class TricycleModel(DynamicsModel):
       paj_params: PajieckaParams,
       dt: float = 0.1,
       max_accel: float = 6.0,
-      max_steering: float = 0.3,
+      max_steering: float = 1.0, # 0.3
       normalize_actions: bool = False,
   ):
     """Initializes the bounds of the action space.
@@ -204,10 +204,10 @@ class TricycleModel(DynamicsModel):
             AB_L: left rear wheel acceleration [-1, 1]
             AB_R: right rear wheel acceleration [-1, 1]
             braking: braking force (not used)?
-    State:  X: x position
-            Y: y position
-            Vx: x velocity
-            Vy: y velocity
+    State:  x: x position
+            y: y position
+            vel_x: x velocity
+            vel_y: y velocity
             yaw: yaw angle
             yaw_rate: yaw rate
     '''
@@ -217,20 +217,7 @@ class TricycleModel(DynamicsModel):
     # beta, AB_L, AB_R = jnp.split(action_array, 3, axis=-1)
     beta, AB_L, AB_R = action_array
 
-    # beta = action.beta
-    # AB_L = action.AB_L
-    # AB_R = action.AB_R
-
-    # x = state[0]
-    # y = state[1]
-    # vel_x = state[2]
-    # vel_y = state[3]
-    # yaw = state[4]
-    # # yaw_rate = trajectory.yaw_rate
-    # yaw_rate = state[5]
     x, y, vel_x, vel_y, yaw, yaw_rate = state # float shape ()
-
-
 
     #region front wheel acc
     # front wheel angle
@@ -254,9 +241,11 @@ class TricycleModel(DynamicsModel):
     v2y = vel_y - self.gk_geometry.l2 * yaw_rate  #  Linearized?  go kart frame
     F2_n = self.gk_geometry.F2n
     # Lateral acceleration from from left rear wheel Marc Heim (2.77)
-    F2l_y = self._get_rear_acc_y(v2y, vel_x, (AB_L / 2) / F2_n) * F2_n / 2
+    # F2l_y = self._get_rear_acc_y(v2y, vel_x, (AB_L / 2) / F2_n) * F2_n / 2
+    F2l_y = self._get_rear_acc_y(v2y, vel_x, AB_L / 2) * F2_n / 2
     # Lateral acceleration from from right rear wheel Marc Heim (2.77)
-    F2r_y = self._get_rear_acc_y(v2y, vel_x, (AB_R / 2) / F2_n) * F2_n / 2 
+    # F2r_y = self._get_rear_acc_y(v2y, vel_x, (AB_R / 2) / F2_n) * F2_n / 2 
+    F2r_y = self._get_rear_acc_y(v2y, vel_x, AB_R / 2) * F2_n / 2 
     # Lateral acceleration from rear wheels
     F2y = self._get_rear_acc_y(v2y, vel_x, total_acc / F2_n) * F2_n
     # endregion
@@ -272,7 +261,8 @@ class TricycleModel(DynamicsModel):
 
     #region Gokart accelerations
     # Rotational Acceleration of the kart Marc Heim (2.88, 2.91)
-    rotacc_z = (tv_trq + F1[1] * self.gk_geometry.l1 - F2y * self.gk_geometry.l2) / self.model_params.Iz
+    # rotacc_z = (tv_trq + F1[1] * self.gk_geometry.l1 - F2y * self.gk_geometry.l2) / self.model_params.Iz
+    rotacc_z = (tv_trq + F1[1] * self.gk_geometry.l1 - (F2l_y + F2r_y) * self.gk_geometry.l2) / self.model_params.Iz
     # Forward Acceleration of kart Marc Heim (2.86, 2.89), extended
     acc_x = F1[0] + total_acc + yaw_rate * vel_y
     # Lateral Acceleration of kart Marc Heim (2.87, 2.90)

@@ -133,7 +133,7 @@ class SimulatorState:
 class GoKartSimState(SimulatorState):
     sim_trajectory: object_state.GoKartTrajectory
     log_trajectory: object_state.GoKartTrajectory
-  
+    sdc_paths: Optional[route.GoKartPaths] = None
 
 def update_state_by_log(
     state: SimulatorState, num_steps: int
