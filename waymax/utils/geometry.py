@@ -336,3 +336,14 @@ def compute_pairwise_overlaps(traj: jax.Array) -> jax.Array:
 def wrap_yaws(yaws: jax.Array | tf.Tensor) -> jax.Array | tf.Tensor:
   """Wraps yaw angles between pi and -pi radians."""
   return (yaws + jnp.pi) % (2 * jnp.pi) - jnp.pi
+
+def rotation_matrix(theta):
+  """
+  Create a 2D rotation matrix for a given angle theta.
+  """
+  cos = jnp.cos(theta)
+  sin = jnp.sin(theta)
+  return jnp.array([
+      [cos, -sin],
+      [sin, cos]
+  ])

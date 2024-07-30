@@ -146,7 +146,7 @@ class PlanningAgentDynamics(_dynamics.DynamicsModel):
 
 
 @chex.dataclass
-class PlanningAgentSimulatorState(datatypes.GoKartSimState):
+class PlanningAgentSimulatorState(datatypes.SimulatorState):
   """Simulator state for the planning agent environment.
 
   Attributes:

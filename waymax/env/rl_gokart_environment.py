@@ -29,9 +29,22 @@ from waymax.agents import actor_core
 from waymax.env import abstract_environment
 from waymax.env import base_environment as _env
 from waymax.env import typedefs as types
-from waymax.env import PlanningAgentEnvironment, PlanningAgentSimulatorState
+from waymax.env import PlanningAgentEnvironment
 from waymax.utils import geometry
 
+
+@chex.dataclass
+class PlanningGoKartSimState(datatypes.GoKartSimState):
+  """Simulator state for the planning agent environment.
+
+  Attributes:
+    sim_agent_actor_states: State of the sim agents that are being run inside of
+      the environment `step` function. If sim agents state is provided, this
+      will be updated. The list of sim agent states should be as long as and in
+      the same order as the number of sim agents run in the environment.
+  """
+
+  sim_agent_actor_states: Sequence[actor_core.ActorState] = ()
 
 class GokartRacingEnvironment(PlanningAgentEnvironment):
 
@@ -45,7 +58,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
   ) -> None:
     super().__init__(dynamics_model, config, sim_agent_actors, sim_agent_params)
 
-  def observe(self, state: PlanningAgentSimulatorState) -> types.Observation:
+  def observe(self, state: PlanningGoKartSimState) -> types.Observation:
     """Computes the observation for the given simulation state.
 
     Here we assume that the default observation is just the simulator state. We
@@ -139,7 +152,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
     obs = jnp.concatenate([sdc_vel_curr, dir_diff, distance_to_edge], axis=-1) ## add information of the track? + yaw rate
     return obs
   
-  def check_termination(self, state: PlanningAgentSimulatorState) -> jnp.ndarray:
+  def check_termination(self, state: PlanningGoKartSimState) -> jnp.ndarray:
     """Checks if the episode should terminate.
 
     Args:

@@ -31,38 +31,13 @@ import numpy as np
 from waymax import datatypes
 from waymax.dynamics import abstract_dynamics
 from waymax.utils import geometry
-# from waymax.config import GoKartGeometry, TricycleParams, PajieckaParams
+from waymax.utils.gokart_config import GoKartGeometry, TricycleParams, PajieckaParams
 
 DynamicsModel = abstract_dynamics.DynamicsModel
 # TODO Determine whether 0.6 is appropriate speed limit.
 # This speed limit helps to filter out false positive very large steering value.
 _SPEED_LIMIT = 0.6  # Units: m/s
 
-class GoKartGeometry:
-  l1: float = 0.5 # Distance from cog to front tires
-  l2: float = 0.5 # Distance from cog to rear tires
-  w1: float = 1 # Distance between front Tires
-  w2: float = 1 # Distance between rear Tires
-  back2backaxle: float = 0.3 # Distance from the rear of the gokart to the back axle
-  frontaxle2front: float = 0.3 # Distance from the front axle to the front of the kart
-  wheel2border: float = 0.2 # Side distance between center of the wheel and external frame
-  F2n: float = l1/(l1 + l2) # Normal force at the rear axle
-
-class TricycleParams:
-  Iz: float = 0.7 # Inertia around the z axis
-  REG_: float = 0.5 # Regularization factor
-  
-class PajieckaParams:
-  class front_paj:
-    B: float = 13.17
-    C: float = 1.26
-    D: float = 0.8
-    E: float = 0.42
-  class rear_paj:
-    B: float = 9.02
-    C: float = 1.27
-    D: float = 0.97
-    E: float = 0.21
 
 class TricycleModel(DynamicsModel):
   """Dynamics model using acceleration and steering curvature for control."""
@@ -137,7 +112,7 @@ class TricycleModel(DynamicsModel):
     )
     return jnp.stack([steering, acc_l, acc_r], axis=-1)
 
-  @jax.named_scope('InvertibleBicycleModel.compute_update')
+  @jax.named_scope('TricycleModel.compute_update')
   def compute_update(
       self,
       action: datatypes.Action,
@@ -225,13 +200,13 @@ class TricycleModel(DynamicsModel):
 
     # velocities at front wheel (Marc Heim, (2.43))
     vel1 = jnp.array([vel_x, vel_y + self.gk_geometry.l1 * yaw_rate])   # go kart frame
-    delta_rotation = self._rotation_matrix(delta)
+    delta_rotation = geometry.rotation_matrix(delta)
 
     # Adaption from Marc Heim (2.82f)
     v1_tyre = delta_rotation.T @ vel1   # front tyre frame
     # forces at front wheel, only lateral force, no longitudinal force
     acc_f1y = self._get_front_acc_y(v1_tyre[1], v1_tyre[0])
-    delta_rotation_reverse = self._rotation_matrix(-delta)
+    delta_rotation_reverse = geometry.rotation_matrix(-delta)
     F1 = delta_rotation_reverse.T @ jnp.array([0.0, acc_f1y]); # Marc Heim (2.82f) front acc in go kart frame
     # endregion
 
@@ -268,7 +243,7 @@ class TricycleModel(DynamicsModel):
     # Lateral Acceleration of kart Marc Heim (2.87, 2.90)
     acc_y = F1[1] + F2l_y + F2r_y - yaw_rate * vel_x
 
-    rot_kart = self._rotation_matrix(yaw)
+    rot_kart = geometry.rotation_matrix(yaw)
     lv = jnp.array([vel_x, vel_y])
     gokart_vel = rot_kart @ lv
     #endregion
@@ -287,15 +262,6 @@ class TricycleModel(DynamicsModel):
   def _ackermann_mapping(self, steering: float) -> float:
     """Maps angle of steerig wheel to the steering angle of front wheel."""
     return -0.065 * steering * steering * steering + 0.45 * steering
-
-  def _rotation_matrix(self, theta):
-    """
-    Create a 2D rotation matrix for a given angle theta.
-    """
-    return jnp.array([
-        [jnp.cos(theta), -jnp.sin(theta)],
-        [jnp.sin(theta), jnp.cos(theta)]
-    ])
 
   def _get_front_acc_y(self, v_y: float, v_x: float):
     return self._magic(-v_y / (v_x + self.model_params.REG_), self.paj_params.front_paj)
