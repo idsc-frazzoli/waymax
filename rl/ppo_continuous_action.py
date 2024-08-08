@@ -7,6 +7,7 @@ from flax.linen.initializers import constant, orthogonal
 from typing import Sequence, NamedTuple, Any
 from flax.training.train_state import TrainState
 import distrax
+import dataclasses
 # from wrappers import (
 #     LogWrapper,
 #     BraxGymnaxWrapper,
@@ -16,7 +17,26 @@ import distrax
 #     ClipAction,
 # )
 
+import waymax
 from waymax.env import GokartRacingEnvironment
+from waymax import config as _config, datatypes
+from waymax.dynamics.tricycle_model import TricycleModel
+from waymax.utils.gokart_utils import create_init_state, create_batch_init_state
+from waymax.utils.gokart_config import GoKartGeometry, TricycleParams, PajieckaParams
+from waymax.agents import actor_core
+
+
+# TODO:
+# 1. env.reset() returns a tuple of (observation, env_state)
+# 2. env.step() returns a tuple of (observation, env_state, reward, done, info)
+# 3. immediately reset the environment when offroad?    make it optional
+# 4. vectorize the environment 
+# 5. check the implementation of the dynamics model
+# 6. might need to improve the observe function
+# 7. might need to improve the reward function
+# 8. possible to reset the environment individually?
+
+
 
 class ActorCritic(nn.Module):
     action_dim: Sequence[int]
@@ -70,6 +90,17 @@ def make_train(config):
     #     env = NormalizeVecObservation(env)
     #     env = NormalizeVecReward(env, config["GAMMA"])
 
+    dynamics_model = TricycleModel(gk_geometry=GoKartGeometry(), model_params=TricycleParams(), paj_params=PajieckaParams(), dt=0.1)
+
+    env = GokartRacingEnvironment(
+        dynamics_model=dynamics_model,
+        config=dataclasses.replace(
+            _config.EnvironmentConfig(),
+            max_num_objects=1,
+            init_steps = 1  # => state.timestep = 0
+        ),
+    )
+
 
     def linear_schedule(count):
         frac = (1.0 - (count // (config["NUM_MINIBATCHES"] * config["UPDATE_EPOCHS"]))/ config["NUM_UPDATES"])
@@ -77,10 +108,10 @@ def make_train(config):
 
     def train(rng):
         # INIT NETWORK
-        network = ActorCritic(env.action_space(env_params).shape[0], activation=config["ACTIVATION"])
+        network = ActorCritic(action_dim=3, activation=config["ACTIVATION"])
         rng, _rng = jax.random.split(rng)
-        init_x = jnp.zeros(env.observation_space(env_params).shape)
-        network_params = network.init(_rng, init_x)
+        init_x = jnp.zeros((config["NUM_OBS"],)) # batch size???
+        network_params = network.init(_rng, init_x) # init_x used to determine input shape
         if config["ANNEAL_LR"]:
             tx = optax.chain(
                 optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
@@ -91,16 +122,21 @@ def make_train(config):
                 optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
                 optax.adam(config["LR"], eps=1e-5),
             )
+        
+        # encapsulates the apply function, model parameters, and optimizer state
         train_state = TrainState.create(
-            apply_fn=network.apply,
+            apply_fn=network.apply,     # used during training and evaluation to compute the output of the model
             params=network_params,
             tx=tx,
         )
 
         # INIT ENV
-        rng, _rng = jax.random.split(rng)
-        reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
-        obsv, env_state = env.reset(reset_rng, env_params)
+        env_state = create_batch_init_state(batch_size= config["NUM_ENVS"])
+
+        # rng, _rng = jax.random.split(rng)
+        # reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
+        env_state, obsv= jax.vmap(env.reset, in_axes=(0,))(env_state)
+        # env_state, obsv = env.reset(env_state)
 
         # TRAIN LOOP
         def _update_step(runner_state, unused):
@@ -112,13 +148,17 @@ def make_train(config):
                 rng, _rng = jax.random.split(rng)
                 pi, value = network.apply(train_state.params, last_obs)
                 action = pi.sample(seed=_rng)
+                waymax_action = convert_to_waymaxaction(action)
                 log_prob = pi.log_prob(action)
 
                 # STEP ENV
                 rng, _rng = jax.random.split(rng)
                 rng_step = jax.random.split(_rng, config["NUM_ENVS"])
-                obsv, env_state, reward, done, info = env.step(
-                    rng_step, env_state, action, env_params
+                # obsv, env_state, reward, done, info = env.step(
+                #     env_state, waymax_action.action
+                # )
+                obsv, env_state, reward, done, info = jax.vmap(env.step, in_axes=(0,0))(
+                    env_state, waymax_action.action
                 )
                 transition = Transition(
                     done, action, value, reward, log_prob, last_obs, info
@@ -272,10 +312,18 @@ def make_train(config):
     return train
 
 
+def convert_to_waymaxaction(action: jax.Array):
+    # input: action of shape (batch_size, 3) 
+    # here only one object is controlled
+    action = datatypes.Action(data= action, valid=jnp.ones((action.shape[0], 1), dtype=jnp.bool_))
+    return actor_core.WaymaxActorOutput(action=action, is_controlled=jnp.ones((action.shape[0], 1), dtype=jnp.bool_), actor_state = None)
+
+
 if __name__ == "__main__":
     config = {
         "LR": 3e-4,
-        "NUM_ENVS": 2048,
+        "NUM_ENVS": 128,
+        "NUM_OBS": 11,
         "NUM_STEPS": 10,
         "TOTAL_TIMESTEPS": 5e7,
         "UPDATE_EPOCHS": 4,
@@ -290,8 +338,11 @@ if __name__ == "__main__":
         "ENV_NAME": "hopper",
         "ANNEAL_LR": False,
         "NORMALIZE_ENV": True,
-        "DEBUG": True,
+        #"DEBUG": True,
     }
     rng = jax.random.PRNGKey(30)
-    train_jit = jax.jit(make_train(config))
-    out = train_jit(rng)
+    # train_jit = jax.jit(make_train(config))
+    # out = train_jit(rng)
+    train_function = make_train(config)
+    out = train_function(rng)
+

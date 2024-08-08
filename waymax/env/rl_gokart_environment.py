@@ -14,6 +14,8 @@
 
 """Waymax environment for tasks relating to Planning for the ADV."""
 
+import copy
+from re import T
 from typing import Sequence
 
 import chex
@@ -31,6 +33,8 @@ from waymax.env import base_environment as _env
 from waymax.env import typedefs as types
 from waymax.env import PlanningAgentEnvironment
 from waymax.utils import geometry
+import dataclasses
+from functools import partial
 
 
 @chex.dataclass
@@ -57,6 +61,9 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
       sim_agent_params: Sequence[actor_core.Params] = (),
   ) -> None:
     super().__init__(dynamics_model, config, sim_agent_actors, sim_agent_params)
+    self.metrics_config = dataclasses.replace(_config.MetricsConfig(),metrics_to_run=("offroad", "sdc_progression"))
+    self.reward_config = _config.LinearCombinationRewardConfig(rewards={'offroad': -1.0, 'sdc_progression': 10.0})
+    self.reward_fn = rewards.LinearCombinationReward(self.reward_config)
 
   def observe(self, state: PlanningGoKartSimState) -> types.Observation:
     """Computes the observation for the given simulation state.
@@ -138,13 +145,21 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
     dir_ref = jnp.take_along_axis(state.sdc_paths.dir_xy, idx[..., None], axis=-2)  # (..., num_paths=1, 1, 2)
     dir_ref = jnp.squeeze(dir_ref, axis=(-2,-3))  # (...,2)
 
+    # dir_ref = jnp.arctan2(dir_ref[:, 1], dir_ref[:, 0])  # (...,)
     dir_ref = jnp.arctan2(dir_ref[1], dir_ref[0])  # (...,)
     dir_diff = sdc_yaw_curr - dir_ref  # (...,)
     dir_diff = dir_diff[..., None] # (..., 1)
 
-    is_road_edge = datatypes.is_road_edge(state.roadgraph_points.types)
-    edge_points = state.roadgraph_points.xy[is_road_edge & state.roadgraph_points.valid]
+    # is_road_edge = datatypes.is_road_edge(state.roadgraph_points.types)
+    # edge_points = state.roadgraph_points.xy[is_road_edge & state.roadgraph_points.valid] # not allowed for jit, dynamic indexing !!!
+    # edge_points = get_edge_points(state.roadgraph_points.xy, state.roadgraph_points.types)
+    # indices = jnp.where(is_road_edge)[0]   # jnp.where with single argument not compatible with jit!!!
+    # edge_points = state.roadgraph_points.xy[indices, :]
+    # indices = jnp.where(is_road_edge, size=state.roadgraph_points.types.size, fill_value=-1)[0]
+
+    edge_points = state.roadgraph_points.xy[1000:,:] # for testing, need to find a better way to get the edge points
     if len(sdc_xy_curr.shape) == 1: # no batch dimension
+      # edge_points = state.roadgraph_points.xy[is_road_edge]
       distance_to_edge, _ = calculate_distances_to_boundary(sdc_xy_curr, sdc_yaw_curr, edge_points)
     else:
       distance_to_edge, _ = jax.vmap(calculate_distances_to_boundary, in_axes=(0, 0, 0))(sdc_xy_curr, sdc_yaw_curr, edge_points)
@@ -164,8 +179,59 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
     """
     metric_dict = self.metrics(state)
     is_offroad = metric_dict["offroad"].value.astype(jnp.bool)
-    if is_offroad | state.is_done:
-       self.reset(state)
+    # if is_offroad | state.is_done:
+    #    self.reset(state)
+    condition = jnp.logical_or(is_offroad, state.is_done)
+
+    # Reset the simulator state if the condition is met.  currently not implemented!!!
+    # jnp.where returns a tuple of indices, so we need to extract the first element.
+    reset_idx = jnp.where(condition)[0]
+
+    if jnp.any(condition):
+      return True
+    else:
+      return False
+    # return reset_idx
+
+  def reset(self, state: PlanningGoKartSimState, rng: jax.Array | None = None):
+    """Resets the simulator state.
+
+    Args:
+      state: Current state of the simulator of shape (...).
+      rng: Optional random number generator for stochastic environments.
+
+    Returns:
+      A new state of the simulator after resetting.
+    """
+    state = super().reset(state)
+    obs  = self.observe(state)
+    return state, obs
+  
+  def step(self, state: PlanningGoKartSimState, action: datatypes.Action) -> PlanningGoKartSimState:
+    """Advances simulation by one timestep using the dynamics model.
+
+    Args:
+      state: The current state of the simulator of shape (...).
+      action: The action to apply, of shape (..., num_objects). The
+        actions.valid field is used to denote which objects are being controlled
+        - objects whose valid is False will fallback to default behavior
+        specified by self.dynamics.
+      rng: Optional random number generator for stochastic environments.
+
+    Returns:
+      The next simulation state after taking an action of shape (...).
+    """
+    last_state = copy.deepcopy(state)
+    last_metric_dict = metrics.run_metrics(last_state, self.metrics_config)
+    state = super().step(state, action)
+    metric_dict = metrics.run_metrics(state, self.metrics_config)
+    progression_reward = 10 * (metric_dict["sdc_progression"].value - last_metric_dict["sdc_progression"].value)
+    obs = self.observe(state)
+    # done = self.check_termination(state)
+    done = False # for testing
+    info = {}
+    return obs, state, progression_reward, done, info
+
   
 
 def calculate_distances_to_boundary(car_position, car_yaw, boundary_points, num_rays=8, max_distance=0.15):
@@ -199,3 +265,14 @@ def calculate_distances_to_boundary(car_position, car_yaw, boundary_points, num_
     hit_points = car_position + ray_directions.T * distances[:, None] # (num_rays, 2)
     
     return distances, hit_points
+
+
+def get_edge_points(roadgraph_points_pos, roadgraph_points_types) -> jnp.ndarray:
+    is_road_edge = datatypes.is_road_edge(roadgraph_points_types)
+    indices = jnp.where(is_road_edge)
+    edge_points = roadgraph_points_pos[indices[0], indices[1], :]
+    if len(roadgraph_points_pos.shape) == 1:
+        edge_points = edge_points.reshape((-1, 2))
+    else:
+        edge_points = edge_points.reshape((roadgraph_points_pos.shape[0], -1, 2))
+    return edge_points
