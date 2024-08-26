@@ -29,12 +29,13 @@ from waymax.agents import actor_core
 # TODO:
 # 1. env.reset() returns a tuple of (observation, env_state)
 # 2. env.step() returns a tuple of (observation, env_state, reward, done, info)
-# 3. immediately reset the environment when offroad?    make it optional
+# 3. immediately reset the environment when offroad?    make it optional，not implemented yet
 # 4. vectorize the environment 
 # 5. check the implementation of the dynamics model
 # 6. might need to improve the observe function
 # 7. might need to improve the reward function
-# 8. possible to reset the environment individually?
+# 8. reset the environment individually
+# 9. implement the debug modules
 
 
 
@@ -53,6 +54,7 @@ class ActorCritic(nn.Module):
         actor_mean = nn.Dense(256, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(actor_mean)
         actor_mean = activation(actor_mean)
         actor_mean = nn.Dense(self.action_dim, kernel_init=orthogonal(0.01), bias_init=constant(0.0))(actor_mean)
+        actor_mean = activation(actor_mean) ## TODO: check if this is necessary
         actor_logtstd = self.param("log_std", nn.initializers.zeros, (self.action_dim,))
         pi = distrax.MultivariateNormalDiag(actor_mean, jnp.exp(actor_logtstd))
 
@@ -110,7 +112,7 @@ def make_train(config):
         # INIT NETWORK
         network = ActorCritic(action_dim=3, activation=config["ACTIVATION"])
         rng, _rng = jax.random.split(rng)
-        init_x = jnp.zeros((config["NUM_OBS"],)) # batch size???
+        init_x = jnp.zeros((config["NUM_OBS"],)) 
         network_params = network.init(_rng, init_x) # init_x used to determine input shape
         if config["ANNEAL_LR"]:
             tx = optax.chain(
@@ -148,6 +150,8 @@ def make_train(config):
                 rng, _rng = jax.random.split(rng)
                 pi, value = network.apply(train_state.params, last_obs)
                 action = pi.sample(seed=_rng)
+                action = jnp.clip(action, -1.0, 1.0)
+                # jax.debug.print("action: {}", action)
                 waymax_action = convert_to_waymaxaction(action)
                 log_prob = pi.log_prob(action)
 
@@ -163,6 +167,7 @@ def make_train(config):
                 transition = Transition(
                     done, action, value, reward, log_prob, last_obs, info
                 )
+                env_state, obsv = jax.vmap(env.post_step, in_axes=(0,0,0))(env_state, obsv, done) 
                 runner_state = (train_state, env_state, obsv, rng)
                 return runner_state, transition
 
@@ -222,6 +227,7 @@ def make_train(config):
 
                         # CALCULATE ACTOR LOSS
                         ratio = jnp.exp(log_prob - traj_batch.log_prob)
+                        # jax.debug.print("ratio: {}", ratio)
                         gae = (gae - gae.mean()) / (gae.std() + 1e-8)
                         loss_actor1 = ratio * gae
                         loss_actor2 = (
@@ -232,6 +238,8 @@ def make_train(config):
                             )
                             * gae
                         )
+                        jax.debug.print("Loss1 value: {}", loss_actor1)
+                        jax.debug.print("Loss2 value: {}", loss_actor2) # divided by 0??
                         loss_actor = -jnp.minimum(loss_actor1, loss_actor2)
                         loss_actor = loss_actor.mean()
                         entropy = pi.entropy().mean()
@@ -322,12 +330,12 @@ def convert_to_waymaxaction(action: jax.Array):
 if __name__ == "__main__":
     config = {
         "LR": 3e-4,
-        "NUM_ENVS": 128,
+        "NUM_ENVS": 40, # number of parallel environments
         "NUM_OBS": 11,
-        "NUM_STEPS": 10,
-        "TOTAL_TIMESTEPS": 5e7,
-        "UPDATE_EPOCHS": 4,
-        "NUM_MINIBATCHES": 32,
+        "NUM_STEPS": 1,  # 10 steps * num envs = steps per update 
+        "TOTAL_TIMESTEPS": 80, # 5e7
+        "UPDATE_EPOCHS": 1, # 2
+        "NUM_MINIBATCHES": 1, # 32
         "GAMMA": 0.99,
         "GAE_LAMBDA": 0.95,
         "CLIP_EPS": 0.2,
@@ -345,4 +353,15 @@ if __name__ == "__main__":
     # out = train_jit(rng)
     train_function = make_train(config)
     out = train_function(rng)
+
+    # import time
+    # import matplotlib.pyplot as plt
+    # rng = jax.random.PRNGKey(42)
+    # t0 = time.time()
+    # out = jax.block_until_ready(train_jit(rng))
+    # print(f"time: {time.time() - t0:.2f} s")
+    # plt.plot(out["metrics"]["returned_episode_returns"].mean(-1).reshape(-1))
+    # plt.xlabel("Update Step")
+    # plt.ylabel("Return")
+    # plt.show()
 

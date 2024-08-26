@@ -146,7 +146,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
     dir_ref = jnp.squeeze(dir_ref, axis=(-2,-3))  # (...,2)
 
     # dir_ref = jnp.arctan2(dir_ref[:, 1], dir_ref[:, 0])  # (...,)
-    dir_ref = jnp.arctan2(dir_ref[1], dir_ref[0])  # (...,)
+    dir_ref = jnp.arctan2(dir_ref[..., 1], dir_ref[..., 0])  # (...,)
     dir_diff = sdc_yaw_curr - dir_ref  # (...,)
     dir_diff = dir_diff[..., None] # (..., 1)
 
@@ -157,7 +157,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
     # edge_points = state.roadgraph_points.xy[indices, :]
     # indices = jnp.where(is_road_edge, size=state.roadgraph_points.types.size, fill_value=-1)[0]
 
-    edge_points = state.roadgraph_points.xy[1000:,:] # for testing, need to find a better way to get the edge points
+    edge_points = state.roadgraph_points.xy[..., 1000:,:] # TODO: for testing, need to find a better way to get the edge points
     if len(sdc_xy_curr.shape) == 1: # no batch dimension
       # edge_points = state.roadgraph_points.xy[is_road_edge]
       distance_to_edge, _ = calculate_distances_to_boundary(sdc_xy_curr, sdc_yaw_curr, edge_points)
@@ -185,13 +185,13 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
 
     # Reset the simulator state if the condition is met.  currently not implemented!!!
     # jnp.where returns a tuple of indices, so we need to extract the first element.
-    reset_idx = jnp.where(condition)[0]
+    # reset_idx = jnp.where(condition)[0]
 
-    if jnp.any(condition):
-      return True
-    else:
-      return False
-    # return reset_idx
+    # if jnp.any(condition):
+    #   return True
+    # else:
+    #   return False
+    return condition
 
   def reset(self, state: PlanningGoKartSimState, rng: jax.Array | None = None):
     """Resets the simulator state.
@@ -203,7 +203,30 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
     Returns:
       A new state of the simulator after resetting.
     """
-    state = super().reset(state)
+    chex.assert_equal(
+    self.config.max_num_objects, state.log_trajectory.num_objects
+    )
+
+    # Fills with invalid values (i.e. -1.) and False.
+    sim_traj_uninitialized = datatypes.fill_invalid_trajectory(
+        state.log_trajectory
+    )
+    state_uninitialized = state.replace(
+        timestep=jnp.array(-1), sim_trajectory=sim_traj_uninitialized
+    )
+    state = datatypes.update_state_by_log(
+        state_uninitialized, self.config.init_steps
+    )
+    state = PlanningGoKartSimState(**state)
+    if rng is not None:
+      keys = jax.random.split(rng, len(self._sim_agent_actors))
+    else:
+      keys = [None] * len(self._sim_agent_actors)
+    init_actor_states = [
+        actor_core.init(key, state)
+        for key, actor_core in zip(keys, self._sim_agent_actors)
+    ]
+    state = state.replace(sim_agent_actor_states=init_actor_states)
     obs  = self.observe(state)
     return state, obs
   
@@ -227,10 +250,32 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
     metric_dict = metrics.run_metrics(state, self.metrics_config)
     progression_reward = 10 * (metric_dict["sdc_progression"].value - last_metric_dict["sdc_progression"].value)
     obs = self.observe(state)
-    # done = self.check_termination(state)
-    done = False # for testing
+    done = self.check_termination(state)
+    # done = False # for testing
     info = {}
     return obs, state, progression_reward, done, info
+  
+  def post_step(self, state: PlanningGoKartSimState, obs: jnp.ndarray ,done) -> PlanningGoKartSimState:
+    """reset the environment if the self-driving car is off-road or the episode is done
+
+    Args:
+      state: The current state of the simulator
+      obs: observations
+      dones: A boolean indicating if the episode should terminate
+
+    Returns:
+      The simulation state after post-step processing.
+    """
+    states_re, obs_re = self.reset(state)
+
+    # reset environments based on termination
+    state = jax.tree_map(
+        lambda x, y: jax.lax.select(done, x, y), states_re, state
+    )
+    obs = jax.tree_map(
+        lambda x, y: jax.lax.select(done, x, y), obs_re, obs
+    )
+    return state, obs
 
   
 

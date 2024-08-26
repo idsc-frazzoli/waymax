@@ -166,12 +166,12 @@ def create_init_state(num_timesteps = 300):
     sim_trajectory.y = sim_trajectory.y.at[0, 0].set(TrackControlPoints.y[0])
 
     # not used in go-kart simulation
-    traffic_light = datatypes.TrafficLights(x=jnp.zeros((0, num_timesteps)), 
-                                            y=jnp.zeros((0, num_timesteps)), 
-                                            z = jnp.zeros((0, num_timesteps)), 
-                                            state=jnp.zeros((0, num_timesteps), dtype=jnp.int32), 
-                                            lane_ids=jnp.zeros((0, num_timesteps), dtype=jnp.int32), 
-                                            valid=jnp.ones((0, num_timesteps), dtype=jnp.bool_))
+    traffic_light = datatypes.TrafficLights(x=jnp.zeros((1, num_timesteps)), 
+                                            y=jnp.zeros((1, num_timesteps)), 
+                                            z = jnp.zeros((1, num_timesteps)), 
+                                            state=jnp.zeros((1, num_timesteps), dtype=jnp.int32), 
+                                            lane_ids=jnp.zeros((1, num_timesteps), dtype=jnp.int32), 
+                                            valid=jnp.ones((1, num_timesteps), dtype=jnp.bool_))
     metadata = datatypes.ObjectMetadata(ids=jnp.array([0]), 
                                         object_types=jnp.array([1]), 
                                         is_sdc=jnp.array([True]), 
@@ -230,12 +230,12 @@ def create_batch_init_state(batch_size = 2, num_timesteps = 200):
     sim_trajectory.y = sim_trajectory.y.at[:, 0, 0].set(TrackControlPoints.y[0])
 
     # not used in go-kart simulation
-    traffic_light = datatypes.TrafficLights(x=jnp.zeros((batch_size, 0, num_timesteps)), 
-                                            y=jnp.zeros((batch_size, 0, num_timesteps)), 
-                                            z = jnp.zeros((batch_size, 0, num_timesteps)), 
-                                            state=jnp.zeros((batch_size, 0, num_timesteps), dtype=jnp.int32), 
-                                            lane_ids=jnp.zeros((batch_size, 0, num_timesteps), dtype=jnp.int32), 
-                                            valid=jnp.ones((batch_size, 0, num_timesteps), dtype=jnp.bool_))
+    traffic_light = datatypes.TrafficLights(x=jnp.zeros((batch_size, 1, num_timesteps)), 
+                                            y=jnp.zeros((batch_size, 1, num_timesteps)), 
+                                            z = jnp.zeros((batch_size, 1, num_timesteps)), 
+                                            state=jnp.zeros((batch_size, 1, num_timesteps), dtype=jnp.int32), 
+                                            lane_ids=jnp.zeros((batch_size, 1, num_timesteps), dtype=jnp.int32), 
+                                            valid=jnp.ones((batch_size, 1, num_timesteps), dtype=jnp.bool_))
     metadata = datatypes.ObjectMetadata(ids=jnp.zeros((batch_size,1), dtype=jnp.int32), 
                                         object_types=jnp.ones((batch_size,1), dtype = jnp.int32), 
                                         is_sdc=jnp.ones((batch_size,1), dtype = jnp.bool_), 
