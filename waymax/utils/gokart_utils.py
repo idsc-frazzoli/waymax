@@ -19,7 +19,7 @@ from waymax.agents import actor_core
 from waymax.utils.gokart_config import TrackControlPoints
 
 
-def generate_racing_track(x, y, r, num_points=1001, batch_size=None):
+def generate_racing_track(x, y, r, num_points=2001, batch_size=None):
 # Calculate tangent and normal vectors for each control point
     x_left = []
     y_left = []

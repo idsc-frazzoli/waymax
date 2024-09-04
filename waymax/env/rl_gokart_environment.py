@@ -111,39 +111,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         keepdims=False,
     )
 
-    # Shape: (..., num_objects, num_timesteps=1)
-    obj_valid_curr = datatypes.dynamic_slice(
-        state.sim_trajectory.valid,
-        state.timestep,
-        1,
-        axis=-1,
-    )
-    # Shape: (...)
-    sdc_valid_curr = datatypes.select_by_onehot(
-        obj_valid_curr[..., 0],
-        state.object_metadata.is_sdc,
-        keepdims=False,
-    )
-
-    # Distance from the current sdc position to all the points on sdc_paths (here centerline)
-    # Shape: (..., num_paths, num_points_per_path) our case: num_paths=1
-    dist_raw = jnp.linalg.norm(
-        state.sdc_paths.xy - jnp.expand_dims(sdc_xy_curr, axis=(-2, -3)),
-        axis=-1,
-        keepdims=False,
-    )
-    # Only consider valid on-route paths.
-    dist = jnp.where(state.sdc_paths.valid & state.sdc_paths.on_route, dist_raw, jnp.inf)
-    # Only consider valid SDC states. # shape: (..., num_paths, num_points_per_path)
-    dist = jnp.where(
-        jnp.expand_dims(sdc_valid_curr, axis=(-1, -2)), dist, jnp.inf
-    )
-    
-    idx = jnp.argmin(dist, axis=-1, keepdims=True)  # (..., num_paths=1, 1)
-
-    # use the direction of the nearest sdc_path point as referece direction
-    dir_ref = jnp.take_along_axis(state.sdc_paths.dir_xy, idx[..., None], axis=-2)  # (..., num_paths=1, 1, 2)
-    dir_ref = jnp.squeeze(dir_ref, axis=(-2,-3))  # (...,2)
+    dir_ref = self.get_ref_direction(state)  # (...,2)
 
     # dir_ref = jnp.arctan2(dir_ref[:, 1], dir_ref[:, 0])  # (...,)
     dir_ref = jnp.arctan2(dir_ref[..., 1], dir_ref[..., 0])  # (...,)
@@ -157,7 +125,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
     # edge_points = state.roadgraph_points.xy[indices, :]
     # indices = jnp.where(is_road_edge, size=state.roadgraph_points.types.size, fill_value=-1)[0]
 
-    edge_points = state.roadgraph_points.xy[..., 1000:,:] # TODO: for testing, need to find a better way to get the edge points
+    edge_points = state.roadgraph_points.xy[..., 2000:,:] # TODO: for testing, need to find a better way to get the edge points
     if len(sdc_xy_curr.shape) == 1: # no batch dimension
       # edge_points = state.roadgraph_points.xy[is_road_edge]
       distance_to_edge, _ = calculate_distances_to_boundary(sdc_xy_curr, sdc_yaw_curr, edge_points)
@@ -230,27 +198,48 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
     obs  = self.observe(state)
     return state, obs
   
-  def step(self, state: PlanningGoKartSimState, action: datatypes.Action) -> PlanningGoKartSimState:
+  def step(self, state: PlanningGoKartSimState, action: datatypes.Action):
     """Advances simulation by one timestep using the dynamics model.
 
     Args:
       state: The current state of the simulator of shape (...).
-      action: The action to apply, of shape (..., num_objects). The
-        actions.valid field is used to denote which objects are being controlled
-        - objects whose valid is False will fallback to default behavior
-        specified by self.dynamics.
+      action: The action to apply, of shape (..., num_objects). 
       rng: Optional random number generator for stochastic environments.
 
     Returns:
       The next simulation state after taking an action of shape (...).
     """
+    # compute reward, currently only progression reward is implemented
     last_state = copy.deepcopy(state)
-    last_metric_dict = metrics.run_metrics(last_state, self.metrics_config)
+    last_pos_xy = state.current_sim_trajectory.xy[..., 0, :]
+    # shape: (...,2)
+    last_sdc_xy = datatypes.select_by_onehot(
+        last_pos_xy,
+        state.object_metadata.is_sdc,
+        keepdims=False,
+    )
+    
     state = super().step(state, action)
+    current_pos_xy = state.current_sim_trajectory.xy[..., 0, :]
+    # shape: (...,2)
+    current_sdc_xy = datatypes.select_by_onehot(
+        current_pos_xy,
+        state.object_metadata.is_sdc,
+        keepdims=False,
+    )
+    movement_vector = current_sdc_xy - last_sdc_xy
+    dir_ref = self.get_ref_direction(state)
+    last_metric_dict = metrics.run_metrics(last_state, self.metrics_config)
     metric_dict = metrics.run_metrics(state, self.metrics_config)
-    progression_reward = 10 * (metric_dict["sdc_progression"].value - last_metric_dict["sdc_progression"].value)
+    progression_reward = 1000 * (metric_dict["sdc_progression"].value - last_metric_dict["sdc_progression"].value)
+    progression_reward = jnp.where(
+      jnp.dot(movement_vector, dir_ref) > 0,
+      progression_reward,
+      0) # no reward if the self-driving car is moving in the wrong direction (TODO:signed progression reward)
+
     obs = self.observe(state)
     done = self.check_termination(state)
+    state, obs = self.post_step(state, obs, done)
     # done = False # for testing
     info = {}
     return obs, state, progression_reward, done, info
@@ -276,10 +265,64 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         lambda x, y: jax.lax.select(done, x, y), obs_re, obs
     )
     return state, obs
+  
+  def get_ref_direction(self, state: PlanningGoKartSimState) -> jnp.ndarray:
+    """Get the reference direction of the self-driving car
+
+    Args:
+      state: The current state of the simulator
+
+    Returns:
+      The reference direction of the self-driving car
+    """
+    # shape: (..., num_objects, timesteps=1, 2) -> (..., num_objects, 2)
+    pos_xy = state.current_sim_trajectory.xy[..., 0, :]
+
+    # shape: (...,2)
+    sdc_xy_curr = datatypes.select_by_onehot(
+        pos_xy,
+        state.object_metadata.is_sdc,
+        keepdims=False,
+    )
+
+    # Shape: (..., num_objects, num_timesteps=1)
+    obj_valid_curr = datatypes.dynamic_slice(
+        state.sim_trajectory.valid,
+        state.timestep,
+        1,
+        axis=-1,
+    )
+    # Shape: (...)
+    sdc_valid_curr = datatypes.select_by_onehot(
+        obj_valid_curr[..., 0],
+        state.object_metadata.is_sdc,
+        keepdims=False,
+    )
+    # Distance from the current sdc position to all the points on sdc_paths (here centerline)
+    # Shape: (..., num_paths, num_points_per_path) our case: num_paths=1
+    dist_raw = jnp.linalg.norm(
+        state.sdc_paths.xy - jnp.expand_dims(sdc_xy_curr, axis=(-2, -3)),
+        axis=-1,
+        keepdims=False,
+    )
+    # Only consider valid on-route paths.
+    dist = jnp.where(state.sdc_paths.valid & state.sdc_paths.on_route, dist_raw, jnp.inf)
+    # Only consider valid SDC states. # shape: (..., num_paths, num_points_per_path)
+    dist = jnp.where(
+        jnp.expand_dims(sdc_valid_curr, axis=(-1, -2)), dist, jnp.inf
+    )
+    
+    idx = jnp.argmin(dist, axis=-1, keepdims=True)  # (..., num_paths=1, 1)
+
+    # use the direction of the nearest sdc_path point as referece direction
+    dir_ref = jnp.take_along_axis(state.sdc_paths.dir_xy, idx[..., None], axis=-2)  # (..., num_paths=1, 1, 2)
+    dir_ref = jnp.squeeze(dir_ref, axis=(-2,-3))  # (...,2)
+
+    return dir_ref
 
   
 
-def calculate_distances_to_boundary(car_position, car_yaw, boundary_points, num_rays=8, max_distance=0.15):
+def calculate_distances_to_boundary(car_position, car_yaw, boundary_points, num_rays=8, max_distance=0.1):
     """
     calculate distances to boundary in different directions
     
@@ -301,7 +344,9 @@ def calculate_distances_to_boundary(car_position, car_yaw, boundary_points, num_
     relative_positions = boundary_points - car_position # (N, 2)
     projections = jnp.dot(relative_positions, ray_directions) # (N, num_rays)
     distances_to_points = jnp.linalg.norm(relative_positions, axis=1, keepdims=True)  # (N, 1)
-    perpendicular_distances = jnp.sqrt(distances_to_points**2 - projections**2)  # (N, num_rays)
+    # perpendicular_distances = jnp.sqrt(distances_to_points**2 - projections**2)  # (N, num_rays)
+    perpendicular_distances = jnp.sqrt(jnp.maximum(distances_to_points**2 - projections**2, 0))
+
     
     valid_mask = (projections > 0) & (perpendicular_distances < max_distance)  
     valid_projections = jnp.where(valid_mask, projections, jnp.inf)  # (N, num_rays)

@@ -8,4 +8,5 @@ docs/notebooks/datatypes_demo.ipynb
 docs/notebooks/multi_actors_demo.ipynb
 /.vscode
 waymax/demo_scripts/test.py
-docs/notebooks/data_demo.ipynb
+docs/notebooks
+rl/logs
