@@ -10,3 +10,5 @@ docs/notebooks/multi_actors_demo.ipynb
 waymax/demo_scripts/test.py
 docs/notebooks
 rl/logs
+wandb/
+__pycache__

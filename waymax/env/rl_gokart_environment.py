@@ -15,14 +15,13 @@
 """Waymax environment for tasks relating to Planning for the ADV."""
 
 import copy
-from re import T
 from typing import Sequence
 
 import chex
 from dm_env import specs
 import jax
 import jax.numpy as jnp
-from waymax import config as _config
+from waymax import config as _config, visualization
 from waymax import datatypes
 from waymax import dynamics as _dynamics
 from waymax import metrics
@@ -64,6 +63,9 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
     self.metrics_config = dataclasses.replace(_config.MetricsConfig(),metrics_to_run=("offroad", "sdc_progression"))
     self.reward_config = _config.LinearCombinationRewardConfig(rewards={'offroad': -1.0, 'sdc_progression': 10.0})
     self.reward_fn = rewards.LinearCombinationReward(self.reward_config)
+    self._current_position = None
+    self._current_yaw = None
+    self._current_velocity = None
 
   def observe(self, state: PlanningGoKartSimState) -> types.Observation:
     """Computes the observation for the given simulation state.
@@ -196,7 +198,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
     ]
     state = state.replace(sim_agent_actor_states=init_actor_states)
     obs  = self.observe(state)
-    return state, obs
+    return obs, state
   
   def step(self, state: PlanningGoKartSimState, action: datatypes.Action):
     """Advances simulation by one timestep using the dynamics model.
@@ -232,6 +234,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
     last_metric_dict = metrics.run_metrics(last_state, self.metrics_config)
     metric_dict = metrics.run_metrics(state, self.metrics_config)
     progression_reward = 1000 * (metric_dict["sdc_progression"].value - last_metric_dict["sdc_progression"].value)
+    # progression_reward = self._compute_progression_reward(last_state, state)
     progression_reward = jnp.where(
       jnp.dot(movement_vector, dir_ref) > 0,
       progression_reward,
@@ -239,12 +242,12 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
 
     obs = self.observe(state)
     done = self.check_termination(state)
-    state, obs = self.post_step(state, obs, done)
+    obs, state = self.post_step(state, obs, done)
     # done = False # for testing
     info = {}
     return obs, state, progression_reward, done, info
   
-  def post_step(self, state: PlanningGoKartSimState, obs: jnp.ndarray ,done) -> PlanningGoKartSimState:
+  def post_step(self, state: PlanningGoKartSimState, obs: jnp.ndarray, done) -> PlanningGoKartSimState:
     """reset the environment if the self-driving car is off-road or the episode is done
 
     Args:
@@ -255,16 +258,167 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
     Returns:
       The simulation state after post-step processing.
     """
-    states_re, obs_re = self.reset(state)
+    # states_re, obs_re = self.reset(state)
 
-    # reset environments based on termination
-    state = jax.tree_map(
-        lambda x, y: jax.lax.select(done, x, y), states_re, state
+    # # reset environments based on termination
+    # state = jax.tree_map(
+    #     lambda x, y: jax.lax.select(done, x, y), states_re, state
+    # )
+    # obs = jax.tree_map(
+    #     lambda x, y: jax.lax.select(done, x, y), obs_re, obs
+    # )
+
+    obs, state = jax.lax.cond(
+        done,
+        lambda _: self.reset(state), 
+        lambda _: (obs, state),       
+        operand=None 
     )
-    obs = jax.tree_map(
-        lambda x, y: jax.lax.select(done, x, y), obs_re, obs
+    return obs, state
+  
+  def compute_reward(self, last_state: PlanningGoKartSimState, state: PlanningGoKartSimState) -> jnp.ndarray:
+    """Computes the reward for the given simulation state.
+
+    Args:
+      
+      state: Current state of the simulator of shape (...).
+
+    Returns:
+      The reward for the given simulation state.
+    """
+    metric_dict = self.metrics(state)
+    reward = self.reward_fn(metric_dict)
+    return reward
+  
+  def _compute_progression_reward(self, last_state: PlanningGoKartSimState, state: PlanningGoKartSimState) -> jnp.ndarray:
+    """Computes the progression reward.
+
+    Args:
+      last_state: The last state of the simulator.
+      state: The current state of the simulator.
+
+    Returns:
+      The progression reward.
+    """
+    sdc_paths = state.sdc_paths
+    if sdc_paths is None:
+      raise ValueError(
+          'SimulatorState.sdc_paths required to compute the route progression '
+          'metric.'
+      )
+
+    # Shape: (..., num_objects, num_timesteps=1, 2)
+    obj_xy_last = datatypes.dynamic_slice(
+        last_state.sim_trajectory.xy,
+        last_state.timestep,
+        1,
+        axis=-2,
     )
-    return state, obs
+    obj_xy_curr = datatypes.dynamic_slice(
+        state.sim_trajectory.xy,
+        state.timestep,
+        1,
+        axis=-2,
+    )
+
+
+    # Shape: (..., 2)
+    sdc_xy_last = datatypes.select_by_onehot(
+        obj_xy_last[..., 0, :],
+        last_state.object_metadata.is_sdc,
+        keepdims=False,
+    )
+    sdc_xy_curr = datatypes.select_by_onehot(
+        obj_xy_curr[..., 0, :],
+        state.object_metadata.is_sdc,
+        keepdims=False,
+    )
+
+    # sdc_xy_start = datatypes.select_by_onehot(
+    #     state.log_trajectory.xy[..., 0, :],
+    #     state.object_metadata.is_sdc,
+    #     keepdims=False,
+    # )
+    # sdc_xy_end = datatypes.select_by_onehot(
+    #     state.log_trajectory.xy[..., -1, :],
+    #     state.object_metadata.is_sdc,
+    #     keepdims=False,
+    # )
+
+    # # Shape: (..., num_objects, num_timesteps=1)
+    # obj_valid_curr = datatypes.dynamic_slice(
+    #     state.sim_trajectory.valid,
+    #     simulator_state.timestep,
+    #     1,
+    #     axis=-1,
+    # )
+    # # Shape: (...)
+    # sdc_valid_curr = datatypes.select_by_onehot(
+    #     obj_valid_curr[..., 0],
+    #     simulator_state.object_metadata.is_sdc,
+    #     keepdims=False,
+    # )
+
+    # Shape: (..., num_paths, num_points_per_path)
+    dist = jnp.linalg.norm(
+        sdc_paths.xy - jnp.expand_dims(sdc_xy_curr, axis=(-2, -3)),
+        axis=-1,
+        keepdims=False,
+    )
+    # # Only consider valid on-route paths.
+    # dist = jnp.where(sdc_paths.valid & sdc_paths.on_route, dist_raw, jnp.inf)
+    # # Only consider valid SDC states.
+    # dist = jnp.where(
+    #     jnp.expand_dims(sdc_valid_curr, axis=(-1, -2)), dist, jnp.inf
+    # )
+    dist_path = jnp.min(dist, axis=-1, keepdims=True)  # (..., num_paths, 1) find the nearest point to the car on each path
+    idx = jnp.argmin(dist_path, axis=-2, keepdims=True)  # (..., 1, 1) find the index of the nearest path
+    min_dist_path = jnp.min(dist, axis=(-1, -2))  # (...) find the minimum distance to the nearest path
+
+    # Shape: (..., max(num_points_per_path))
+    ref_path = jax.tree_util.tree_map(
+        lambda x: jnp.take_along_axis(x, indices=idx, axis=-2)[..., 0, :],
+        sdc_paths,
+    )
+
+    def get_arclength_for_pts(xy: jax.Array, path: datatypes.Paths):
+      # Shape: (..., max(num_points_per_path))
+      dist_raw = jnp.linalg.norm(
+          xy[..., jnp.newaxis, :] - path.xy, axis=-1, keepdims=False
+      )
+      dist = jnp.where(path.valid, dist_raw, jnp.inf)
+      idx = jnp.argmin(dist, axis=-1, keepdims=True)
+      # (..., )
+      return jnp.take_along_axis(path.arc_length, indices=idx, axis=-1)[..., 0]
+
+    # start_dist = get_arclength_for_pts(sdc_xy_start, ref_path)
+    # end_dist = get_arclength_for_pts(sdc_xy_end, ref_path)
+    last_dist = get_arclength_for_pts(sdc_xy_last, ref_path)
+    curr_dist = get_arclength_for_pts(sdc_xy_curr, ref_path)
+
+    # progress = jnp.where(
+    #     end_dist == start_dist,
+    #     FULL_PROGRESS_VALUE,
+    #     (curr_dist - start_dist) / (end_dist - start_dist),
+    # )
+    progress = curr_dist - last_dist
+    valid = jnp.isfinite(min_dist_path)
+    progress = jnp.where(valid, progress, 0.0)
+    return progress
+  
+  # def _compute_orientation_reward(self, state: PlanningGoKartSimState):
+  #   """Computes the orientation reward.
+
+  #   Args:
+  #     state: The current state of the simulator.
+
+  #   Returns:
+  #     The orientation reward.
+  #   """
+  #   dir_ref = self.get_ref_direction(state)
+    
+  #   return progression_reward
+
   
   def get_ref_direction(self, state: PlanningGoKartSimState) -> jnp.ndarray:
     """Get the reference direction of the self-driving car
@@ -345,7 +499,7 @@ def calculate_distances_to_boundary(car_position, car_yaw, boundary_points, num_
     projections = jnp.dot(relative_positions, ray_directions) # (N, num_rays)
     distances_to_points = jnp.linalg.norm(relative_positions, axis=1, keepdims=True)  # (N, 1)
     # perpendicular_distances = jnp.sqrt(distances_to_points**2 - projections**2)  # (N, num_rays)
-    perpendicular_distances = jnp.sqrt(jnp.maximum(distances_to_points**2 - projections**2, 0))
+    perpendicular_distances = jnp.sqrt(jnp.maximum(distances_to_points**2 - projections**2, 0))  # TODO log the value!!! (N, num_rays) CAR OUTSIDE THE TRACK
 
     
     valid_mask = (projections > 0) & (perpendicular_distances < max_distance)  

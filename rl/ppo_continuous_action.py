@@ -1,3 +1,4 @@
+from multiprocessing.reduction import steal_handle
 import jax
 import jax.numpy as jnp
 import flax.linen as nn
@@ -8,6 +9,7 @@ from typing import Sequence, NamedTuple, Any
 from flax.training.train_state import TrainState
 import distrax
 import dataclasses
+import wandb
 # from wrappers import (
 #     LogWrapper,
 #     BraxGymnaxWrapper,
@@ -16,6 +18,7 @@ import dataclasses
 #     NormalizeVecReward,
 #     ClipAction,
 # )
+from wrappers import WaymaxLogWrapper
 
 import waymax
 from waymax.env import GokartRacingEnvironment
@@ -24,6 +27,7 @@ from waymax.dynamics.tricycle_model import TricycleModel
 from waymax.utils.gokart_utils import create_init_state, create_batch_init_state
 from waymax.utils.gokart_config import GoKartGeometry, TricycleParams, PajieckaParams
 from waymax.agents import actor_core
+from waymax import visualization
 
 import pandas as pd
 from datetime import datetime
@@ -81,13 +85,12 @@ class Transition(NamedTuple):
     info: jnp.ndarray
 
 df_log = pd.DataFrame(columns=["loss/total_loss", "loss/value_loss", "loss/loss_actor", "loss/entropy"])
-df_matrix = pd.DataFrame(columns=["matrix/obs"])
+# df_matrix = pd.DataFrame(columns=["matrix/obs"])
 
-def make_train(config):
+def make_train(config, viz_cfg):
     config["NUM_UPDATES"] = (
         config["TOTAL_TIMESTEPS"] // config["NUM_STEPS"] // config["NUM_ENVS"]
     )
-    iter = 0 # max: NUM_UPDATES
     config["MINIBATCH_SIZE"] = (
         config["NUM_ENVS"] * config["NUM_STEPS"] // config["NUM_MINIBATCHES"]
     )
@@ -120,6 +123,7 @@ def make_train(config):
             init_steps = 1  # => state.timestep = 0
         ),
     )
+    env = WaymaxLogWrapper(env)
 
 
     def linear_schedule(count):
@@ -155,14 +159,14 @@ def make_train(config):
 
         # rng, _rng = jax.random.split(rng)
         # reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
-        env_state, obsv= jax.vmap(env.reset, in_axes=(0,))(env_state)
+        obsv, env_state = jax.vmap(env.reset, in_axes=(0,))(env_state)
         # env_state, obsv = env.reset(env_state)
 
         # TRAIN LOOP
         def _update_step(runner_state, unused):
             # COLLECT TRAJECTORIES
             def _env_step(runner_state, unused):
-                train_state, env_state, last_obs, rng = runner_state
+                train_state, env_state, last_obs, rng, num_updates = runner_state
 
                 # SELECT ACTION
                 rng, _rng = jax.random.split(rng)
@@ -188,7 +192,7 @@ def make_train(config):
                     done, action, value, reward, log_prob, last_obs, info
                 )
                 # env_state, obsv = jax.vmap(env.post_step, in_axes=(0,0,0))(env_state, obsv, done) # reset the env if done
-                runner_state = (train_state, env_state, obsv, rng)
+                runner_state = (train_state, env_state, obsv, rng, num_updates)
                 return runner_state, transition
 
             # traj_batch is collection of Transition
@@ -197,7 +201,7 @@ def make_train(config):
             )
 
             # CALCULATE ADVANTAGE
-            train_state, env_state, last_obs, rng = runner_state
+            train_state, env_state, last_obs, rng, num_updates = runner_state
             _, last_val = network.apply(train_state.params, last_obs)
 
             def _calculate_gae(traj_batch, last_val):
@@ -315,7 +319,10 @@ def make_train(config):
             ) # loss_info: [UPDATE_EPOCHS, NUM_MINIBATCHES]
             train_state = update_state[0] # train_state shape [NUM_ENVS, NUM_STEPS] ??
             value_loss, loss_actor, entropy, actions, last_log_prob,log_prob, ratio, gae, value_debug, targets_debug, obs_debug, action_debug = aux_outputs
+            num_updates += 1
             metric = traj_batch.info
+            metric["train/params"] = train_state.params
+            metric["iteration"] = num_updates
             metric["loss/total_loss"] = loss_info.mean()
             metric["loss/value_loss"] = value_loss.mean()
             metric["loss/loss_actor"] = loss_actor.mean()
@@ -347,7 +354,10 @@ def make_train(config):
                     #     print(
                     #         f"global step={timesteps[t]}, episodic return={return_values[t]}"
                     #     )
+                    # info["returned_episode_returns"] # shape [NUM_STEPS, NUM_ENVS] 
                     data_log = {
+                        # "iteration": info["iteration"],
+                        "reward/episode_return": info["returned_episode_returns"].mean(-1).reshape(-1)[-1],
                         "loss/total_loss": info["loss/total_loss"],
                         "loss/value_loss": info["loss/value_loss"],
                         "loss/loss_actor": info["loss/loss_actor"],
@@ -362,34 +372,92 @@ def make_train(config):
                         "loss/targets_debug": info["loss/targets_debug"],
                         "loss/obs_debug": info["loss/obs_debug"],
                     }
-                    data_matrix = {
-                        "matrix/obs": info["matrix/obs"],
-                        "matrix/action": info["matrix/action"]
-                    }
+                    # data_matrix = {
+                    #     "matrix/obs": info["matrix/obs"],
+                    #     "matrix/action": info["matrix/action"]
+                    # }
+                    wandb.log(data_log, step=info["iteration"])
+                    num_updates = int(info["iteration"])
+                    # params = jax.device_get(train_state.params)
+                    if num_updates % 100 == 0:
+                        params = info["train/params"]
+                        # params = jax.device_get(train_state.params)
+                        imgs, _ = evaluate_policy(params, config["NUM_EVAL_STEPS"], viz_cfg)
+                        imgs_np = np.stack(imgs, axis=0)
+                        wandb.log({
+                                    f"Iteration {num_updates}": wandb.Video(
+                                        np.moveaxis(imgs_np, -1, 1),
+                                        fps=10,
+                                        format="gif",
+                                    )
+                                    })
                     
                     new_row = pd.DataFrame([data_log])
                     df_log = pd.concat([df_log, new_row], ignore_index=True)
                     df_log.to_csv(log_path, index=False)
 
-                    new_matrix = pd.DataFrame([data_matrix])
-                    df_matrix = pd.concat([df_matrix, new_matrix], ignore_index=True)
-                    df_matrix.to_csv(log_path_matrix, index=False)
+                    # new_matrix = pd.DataFrame([data_matrix])
+                    # df_matrix = pd.concat([df_matrix, new_matrix], ignore_index=True)
+                    # df_matrix.to_csv(log_path_matrix, index=False)
 
                 # jax.debug.callback(lambda info: callback(info, df_log), metric)
                 jax.debug.callback(callback, metric)
             
             # iter = iter + 1
-            runner_state = (train_state, env_state, last_obs, rng)
+            runner_state = (train_state, env_state, last_obs, rng, num_updates)
             return runner_state, metric
 
         rng, _rng = jax.random.split(rng)
-        runner_state = (train_state, env_state, obsv, _rng)
+        num_updates = 0
+        runner_state = (train_state, env_state, obsv, _rng, num_updates)
         runner_state, metric = jax.lax.scan(
             _update_step, runner_state, None, config["NUM_UPDATES"]
-        )
+        )  #runner_state:final state after all iterations, metric: A collection of outputs from each iteration
         return {"runner_state": runner_state, "metrics": metric}
 
     return train
+
+
+def evaluate_policy(params, num_eval_steps, viz_cfg):
+    network = ActorCritic(action_dim=3, activation="tanh")
+    
+    # Re-initialize the environment
+    dynamics_model = TricycleModel(
+        gk_geometry=GoKartGeometry(),
+        model_params=TricycleParams(),
+        paj_params=PajieckaParams(),
+        dt=0.1
+    )
+    eval_env = GokartRacingEnvironment(
+        dynamics_model=dynamics_model,
+        config=dataclasses.replace(
+            _config.EnvironmentConfig(),
+            max_num_objects=1,
+            init_steps=1
+        ),
+    )
+    eval_env = WaymaxLogWrapper(eval_env)
+    eval_state = create_init_state()
+    imgs = []
+
+    obs, eval_state = eval_env.reset(eval_state)
+
+    total_reward = 0.0
+    for _ in range(num_eval_steps):
+        pi, _ = network.apply(
+            params,
+            obs,
+        )
+        action = pi.mean()
+        waymax_action = datatypes.Action(data=action, valid=jnp.array([True]))
+        imgs.append(visualization.plot_simulator_state(eval_state.env_state, use_log_traj=False,viz_config=viz_cfg))
+        obs, eval_state, reward, done, info = eval_env.step(eval_state, waymax_action)
+        total_reward += reward
+
+        if done:
+            break
+
+    return imgs, total_reward
 
 
 def convert_to_waymaxaction(action: jax.Array):
@@ -402,12 +470,14 @@ def convert_to_waymaxaction(action: jax.Array):
 if __name__ == "__main__":
     config = {
         "LR": 3e-4,
-        "NUM_ENVS": 10, # number of parallel environments
+        "NUM_ENVS": 100, # number of parallel environments
         "NUM_OBS": 11,
         "NUM_STEPS": 4,  # num steps * num envs = steps per update 
-        "TOTAL_TIMESTEPS": 2000, # 5e7
-        "UPDATE_EPOCHS": 3, # 2
-        "NUM_MINIBATCHES": 2, # 32
+        "TOTAL_TIMESTEPS": 8e4, # 5e7
+        "UPDATE_EPOCHS": 2, # 2
+        "NUM_MINIBATCHES": 20, # 32
+        "EVAL_FREQ": 100,
+        "NUM_EVAL_STEPS": 100,
         "GAMMA": 0.99,
         "GAE_LAMBDA": 0.95,
         "CLIP_EPS": 0.2,
@@ -420,11 +490,20 @@ if __name__ == "__main__":
         "NORMALIZE_ENV": True,
         "DEBUG": True,
     }
+    viz_cfg={
+        "front_x": 20.0,
+        "back_x":  20.0,
+        "front_y":  20.0,
+        "back_y": 20.0,
+        "px_per_meter": 15.0
+        }
+    wandb.init(project="waymax_ppo", config=config)
     rng = jax.random.PRNGKey(30)
-    # train_jit = jax.jit(make_train(config))
-    # out = train_jit(rng)
-    train_function = make_train(config)
-    out = train_function(rng)
+    train_jit = jax.jit(make_train(config, viz_cfg))
+    out = train_jit(rng)
+    # train_function = make_train(config)
+    # out = train_function(rng)
+    wandb.finish()
 
     # import time
     # import matplotlib.pyplot as plt
