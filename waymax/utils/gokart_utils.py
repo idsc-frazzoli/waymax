@@ -85,12 +85,15 @@ def generate_racing_track(x, y, r, num_points=2001, batch_size=None):
     dy_right = np.append(dy_right, dy_right[-1])
 
     # normalize the directions
-    dx_center /= np.sqrt(dx_center ** 2 + dy_center ** 2)
-    dy_center /= np.sqrt(dx_center ** 2 + dy_center ** 2)
-    dx_left /= np.sqrt(dx_left ** 2 + dy_left ** 2)
-    dy_left /= np.sqrt(dx_left ** 2 + dy_left ** 2)
-    dx_right /= np.sqrt(dx_right ** 2 + dy_right ** 2)
-    dy_right /= np.sqrt(dx_right ** 2 + dy_right ** 2)
+    mag_center = np.sqrt(dx_center ** 2 + dy_center ** 2)
+    dx_center /= mag_center
+    dy_center /= mag_center
+    mag_left = np.sqrt(dx_left ** 2 + dy_left ** 2)
+    dx_left /= mag_left
+    dy_left /= mag_left
+    mag_right = np.sqrt(dx_right ** 2 + dy_right ** 2)
+    dx_right /= mag_right
+    dy_right /= mag_right
 
     x_points = np.concatenate([x_center, x_left, x_right])
     y_points = np.concatenate([y_center, y_left, y_right])
@@ -182,8 +185,9 @@ def create_init_state(num_timesteps=300):
     dy_path = jnp.diff(y_center)
     dx_path = jnp.append(dx_path, dx_path[-1])
     dy_path = jnp.append(dy_path, dy_path[-1])
-    dx_path /= jnp.sqrt(dx_path ** 2 + dy_path ** 2)
-    dy_path /= jnp.sqrt(dx_path ** 2 + dy_path ** 2)
+    mag_path = jnp.sqrt(dx_path ** 2 + dy_path ** 2)
+    dx_path /= mag_path
+    dy_path /= mag_path
     dx_path = jnp.expand_dims(dx_path, axis=-2)
     dy_path = jnp.expand_dims(dy_path, axis=-2)
     x_path = jnp.expand_dims(x_center, axis=-2)
@@ -252,8 +256,9 @@ def create_batch_init_state(batch_size=2, num_timesteps=200):
     dy_path = jnp.diff(y_center)
     dx_path = jnp.append(dx_path, dx_path[-1])
     dy_path = jnp.append(dy_path, dy_path[-1])
-    dx_path /= jnp.sqrt(dx_path ** 2 + dy_path ** 2)
-    dy_path /= jnp.sqrt(dx_path ** 2 + dy_path ** 2)
+    mag_path = jnp.sqrt(dx_path ** 2 + dy_path ** 2)
+    dx_path /= mag_path
+    dy_path /= mag_path
     dx_path = jnp.expand_dims(dx_path, axis=(-2, -3))
     dy_path = jnp.expand_dims(dy_path, axis=(-2, -3))
     x_path = jnp.expand_dims(x_center, axis=(-2, -3))
