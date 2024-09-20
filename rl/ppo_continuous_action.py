@@ -317,9 +317,16 @@ def make_train(config, viz_cfg):
             update_state, (loss_info, aux_outputs) = jax.lax.scan(
                 _update_epoch, update_state, None, config["UPDATE_EPOCHS"]
             ) # loss_info: [UPDATE_EPOCHS, NUM_MINIBATCHES]
-            train_state = update_state[0] # train_state shape [NUM_ENVS, NUM_STEPS] ??
+            train_state = update_state[0] 
+            # obs_debug shape [UPDATE_EPOCHS, NUM_MINIBATCHES, MINIBATCH_SIZE, NUM_OBS]
             value_loss, loss_actor, entropy, actions, last_log_prob,log_prob, ratio, gae, value_debug, targets_debug, obs_debug, action_debug = aux_outputs
             num_updates += 1
+
+            # DEBUG
+            index = jnp.argmin(obs_debug[..., -1])
+            i, j, k = jnp.unravel_index(index, obs_debug[..., -1].shape)
+            pos_yaw = obs_debug[i, j, k, :3]
+
             metric = traj_batch.info
             metric["train/params"] = train_state.params
             metric["iteration"] = num_updates
@@ -335,7 +342,8 @@ def make_train(config, viz_cfg):
             metric["loss/gae"] = gae.mean()
             metric["loss/value_debug"] = value_debug.mean()
             metric["loss/targets_debug"] = targets_debug.mean()
-            metric["loss/obs_debug"] = obs_debug.mean()
+            metric["loss/obs_debug"] = jnp.min(obs_debug[..., -1])
+            metric["debug/pos_yaw"] = pos_yaw
             metric["matrix/obs"] = obs_debug
             metric["matrix/action"] = action_debug
             rng = update_state[-1]
@@ -371,6 +379,7 @@ def make_train(config, viz_cfg):
                         "loss/value_debug": info["loss/value_debug"],
                         "loss/targets_debug": info["loss/targets_debug"],
                         "loss/obs_debug": info["loss/obs_debug"],
+                        "debug/pos_yaw": info["debug/pos_yaw"]
                     }
                     # data_matrix = {
                     #     "matrix/obs": info["matrix/obs"],
@@ -403,7 +412,6 @@ def make_train(config, viz_cfg):
                 # jax.debug.callback(lambda info: callback(info, df_log), metric)
                 jax.debug.callback(callback, metric)
             
-            # iter = iter + 1
             runner_state = (train_state, env_state, last_obs, rng, num_updates)
             return runner_state, metric
 
@@ -471,7 +479,7 @@ if __name__ == "__main__":
     config = {
         "LR": 3e-4,
         "NUM_ENVS": 100, # number of parallel environments
-        "NUM_OBS": 11,
+        "NUM_OBS": 15,
         "NUM_STEPS": 4,  # num steps * num envs = steps per update 
         "TOTAL_TIMESTEPS": 8e4, # 5e7
         "UPDATE_EPOCHS": 2, # 2
@@ -499,10 +507,10 @@ if __name__ == "__main__":
         }
     wandb.init(project="waymax_ppo", config=config)
     rng = jax.random.PRNGKey(30)
-    train_jit = jax.jit(make_train(config, viz_cfg))
-    out = train_jit(rng)
-    # train_function = make_train(config)
-    # out = train_function(rng)
+    # train_jit = jax.jit(make_train(config, viz_cfg))
+    # out = train_jit(rng)
+    train_function = make_train(config, viz_cfg)
+    out = train_function(rng)
     wandb.finish()
 
     # import time

@@ -18,9 +18,11 @@ import copy
 from typing import Sequence
 
 import chex
+import sys
 from dm_env import specs
 import jax
 import jax.numpy as jnp
+from jax.experimental import checkify
 from waymax import config as _config, visualization
 from waymax import datatypes
 from waymax import dynamics as _dynamics
@@ -130,11 +132,11 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
     edge_points = state.roadgraph_points.xy[..., 2000:,:] # TODO: for testing, need to find a better way to get the edge points
     if len(sdc_xy_curr.shape) == 1: # no batch dimension
       # edge_points = state.roadgraph_points.xy[is_road_edge]
-      distance_to_edge, _ = calculate_distances_to_boundary(sdc_xy_curr, sdc_yaw_curr, edge_points)
+      distance_to_edge, _ , debug_value = calculate_distances_to_boundary(sdc_xy_curr, sdc_yaw_curr, edge_points)
     else:
-      distance_to_edge, _ = jax.vmap(calculate_distances_to_boundary, in_axes=(0, 0, 0))(sdc_xy_curr, sdc_yaw_curr, edge_points)
+      distance_to_edge, _, _ = jax.vmap(calculate_distances_to_boundary, in_axes=(0, 0, 0))(sdc_xy_curr, sdc_yaw_curr, edge_points)
     
-    obs = jnp.concatenate([sdc_vel_curr, dir_diff, distance_to_edge], axis=-1) ## add information of the track? + yaw rate
+    obs = jnp.concatenate([sdc_xy_curr, jnp.array([sdc_yaw_curr]), sdc_vel_curr, dir_diff, distance_to_edge, debug_value], axis=-1) ## add information of the track? + yaw rate
     return obs
   
   def check_termination(self, state: PlanningGoKartSimState) -> jnp.ndarray:
@@ -490,6 +492,8 @@ def calculate_distances_to_boundary(car_position, car_yaw, boundary_points, num_
     distances: distance to boundary in different directions    shape (num_rays,)
     hit_points: points of intersections of rays and boundary    shape (num_rays, 2)
     """
+    
+    # checked_fn = checkify.checkify(check_greater)
 
     angles = jnp.linspace(-jnp.pi/2, jnp.pi/2, num_rays)
 
@@ -498,7 +502,10 @@ def calculate_distances_to_boundary(car_position, car_yaw, boundary_points, num_
     relative_positions = boundary_points - car_position # (N, 2)
     projections = jnp.dot(relative_positions, ray_directions) # (N, num_rays)
     distances_to_points = jnp.linalg.norm(relative_positions, axis=1, keepdims=True)  # (N, 1)
+    # error, out = checked_fn(distances_to_points**2 - projections**2, 0)
+    # error.throw()
     # perpendicular_distances = jnp.sqrt(distances_to_points**2 - projections**2)  # (N, num_rays)
+    debug_value = jnp.min(distances_to_points**2 - projections**2) # TODO reproduce the error, check boundary points
     perpendicular_distances = jnp.sqrt(jnp.maximum(distances_to_points**2 - projections**2, 0))  # TODO log the value!!! (N, num_rays) CAR OUTSIDE THE TRACK
 
     
@@ -508,7 +515,7 @@ def calculate_distances_to_boundary(car_position, car_yaw, boundary_points, num_
     distances = jnp.min(valid_projections, axis=0) # (num_rays,)
     hit_points = car_position + ray_directions.T * distances[:, None] # (num_rays, 2)
     
-    return distances, hit_points
+    return distances, hit_points, jnp.array([debug_value])
 
 
 def get_edge_points(roadgraph_points_pos, roadgraph_points_types) -> jnp.ndarray:
@@ -520,3 +527,9 @@ def get_edge_points(roadgraph_points_pos, roadgraph_points_types) -> jnp.ndarray
     else:
         edge_points = edge_points.reshape((roadgraph_points_pos.shape[0], -1, 2))
     return edge_points
+
+def check_greater(a, b):
+    condition = jnp.all(a > b)
+    checkify.check(condition, f"Assertion failed: is not greater than {b}")
+    return a - b
+
