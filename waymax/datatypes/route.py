@@ -118,10 +118,13 @@ class Paths:
 
 @chex.dataclass
 class GoKartPaths(Paths):
-  dir_x: jax.Array
-  dir_y: jax.Array
+    """Extending the path to have direction information (tangent at each point).
+    #todo if we cna simply extend the Paths class to include the direction information as optional
+    """
+    dir_x: jax.Array
+    dir_y: jax.Array
 
-  @property
-  def dir_xy(self) -> jax.Array:
-    """Stacked xy direction for all points."""
-    return jnp.stack([self.dir_x, self.dir_y], axis=-1)
+    @property
+    def dir_xy(self) -> jax.Array:
+        """Stacked xy direction for all points."""
+        return jnp.stack([self.dir_x, self.dir_y], axis=-1)
