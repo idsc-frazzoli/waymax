@@ -23,7 +23,7 @@ class PPOconfig:
     VF_COEF: float = 0.5
     MAX_GRAD_NORM: float = 0.5
     ACTIVATION: str = "tanh"
-    ENV_NAME: str = "hopper"
+    ENV_NAME: str = "gokart"
     ANNEAL_LR: bool = False
     NORMALIZE_ENV: bool = True
     DEBUG: bool = True

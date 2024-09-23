@@ -11,4 +11,5 @@ waymax/demo_scripts/test.py
 docs/notebooks
 rl/logs
 wandb/
+logs/
 __pycache__
