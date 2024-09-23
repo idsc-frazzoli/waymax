@@ -9,5 +9,6 @@ docs/
 rl/logs
 logs/
 wandb/
+logs/
 __pycache__
 *.egg-info

@@ -40,7 +40,7 @@ class ActorCritic(nn.Module):
 class Transition(NamedTuple):
     done: Float[Array, "?"]
     action: Float[Array, "?"]
-    value: Float[Array, "?"]
+    value: Float[Array, "?"] # todo seems to be a dict[str ,... ]
     reward: Float[Array, "?"]
     log_prob: Float[Array, "?"]
     obs: Float[Array, "?"]
