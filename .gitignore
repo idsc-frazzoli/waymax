@@ -3,12 +3,10 @@ dataset/training/training_tfexample.tfrecord-00000-of-01000
 dataset/training/training_tfexample.tfrecord-00001-of-01000
 waymax/utils/test_utils.py
 waymax/rewards/linear_combination_reward_test.py
-docs/notebooks/data_demo.ipynb
-docs/notebooks/datatypes_demo.ipynb
-docs/notebooks/multi_actors_demo.ipynb
 /.vscode
 waymax/demo_scripts/test.py
-docs/notebooks
+docs/
 rl/logs
 wandb/
 __pycache__
+*.egg-info

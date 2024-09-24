@@ -30,6 +30,21 @@ from waymax.utils.gokart_utils import create_init_state, create_batch_init_state
 #     NormalizeVecReward,
 #     ClipAction,
 # )
+from wrappers import WaymaxLogWrapper, NormalizeVecObservation, NormalizeVecReward
+
+import waymax
+from waymax.env import GokartRacingEnvironment
+from waymax import config as _config, datatypes
+from waymax.dynamics.tricycle_model import TricycleModel
+from waymax.utils.gokart_utils import create_init_state, create_batch_init_state
+from waymax.utils.gokart_config import GoKartGeometry, TricycleParams, PajieckaParams
+from waymax.agents import actor_core
+from waymax import visualization
+
+import pandas as pd
+from datetime import datetime
+import os
+
 
 # TODO:
 # 1. env.reset() returns a tuple of (observation, env_state)
@@ -86,6 +101,9 @@ def make_train(config: PPOconfig, viz_cfg):
             ),
     )
     env = WaymaxLogWrapper(env)
+    # if config["NORMALIZE_ENV"]:
+    #     env = NormalizeVecObservation(env)
+    #     env = NormalizeVecReward(env, config["GAMMA"])
 
     def linear_schedule(count):
         frac = (1.0 - (count // (config.NUM_MINIBATCHES * config.UPDATE_EPOCHS)) / config.NUM_UPDATES)
@@ -418,6 +436,8 @@ def evaluate_policy(params, num_eval_steps, viz_cfg):
     obs, eval_state = eval_env.reset(eval_state)
 
     total_reward = 0.0
+    reward_list = [0]
+    action_list = []
     for _ in range(num_eval_steps):
         pi, _ = network.apply(
                 params,
@@ -427,9 +447,14 @@ def evaluate_policy(params, num_eval_steps, viz_cfg):
         waymax_action = datatypes.Action(data=action, valid=jnp.array([True]))
         imgs.append(visualization.plot_simulator_state(eval_state.env_state, use_log_traj=False, viz_config=viz_cfg))
         obs, eval_state, reward, done, info = eval_env.step(eval_state, waymax_action)
+        action_list.append(action)
+        reward_list.append(reward.item())
         total_reward += reward
 
         if done:
+            # print(f"episode reward: {total_reward}")
+            # print(f"reward list: {reward_list}")
+            # print(f"action list: {action_list}")
             break
 
     return imgs, total_reward

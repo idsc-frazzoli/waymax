@@ -205,12 +205,12 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         """Advances simulation by one timestep using the dynamics model.
 
         Args:
-          state: The current state of the simulator of shape (...).
-          action: The action to apply, of shape (..., num_objects).
-          rng: Optional random number generator for stochastic environments.
+        state: The current state of the simulator of shape (...).
+        action: The action to apply, of shape (..., num_objects). 
+        rng: Optional random number generator for stochastic environments.
 
         Returns:
-          The next simulation state after taking an action of shape (...).
+        The next simulation state after taking an action of shape (...).
         """
         # compute reward, currently only progression reward is implemented
         last_state = copy.deepcopy(state)
@@ -221,32 +221,34 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
                 state.object_metadata.is_sdc,
                 keepdims=False,
         )
-
+        
         state = super().step(state, action)
-        current_pos_xy = state.current_sim_trajectory.xy[..., 0, :]
-        # shape: (...,2)
-        current_sdc_xy = datatypes.select_by_onehot(
-                current_pos_xy,
-                state.object_metadata.is_sdc,
-                keepdims=False,
-        )
-        movement_vector = current_sdc_xy - last_sdc_xy
+        # current_pos_xy = state.current_sim_trajectory.xy[..., 0, :]
+        # # shape: (...,2)
+        # current_sdc_xy = datatypes.select_by_onehot(
+        #     current_pos_xy,
+        #     state.object_metadata.is_sdc,
+        #     keepdims=False,
+        # )
+        # movement_vector = current_sdc_xy - last_sdc_xy
         dir_ref = self.get_ref_direction(state)
-        last_metric_dict = metrics.run_metrics(last_state, self.metrics_config)
-        metric_dict = metrics.run_metrics(state, self.metrics_config)
-        progression_reward = 1000 * (metric_dict["sdc_progression"].value - last_metric_dict["sdc_progression"].value)
-        # progression_reward = self._compute_progression_reward(last_state, state)
-        progression_reward = jnp.where(
-                jnp.dot(movement_vector, dir_ref) > 0,
-                progression_reward,
-                0)  # no reward if the self-driving car is moving in the wrong direction (TODO:signed progression reward)
-
+        # last_metric_dict = metrics.run_metrics(last_state, self.metrics_config)
+        # metric_dict = metrics.run_metrics(state, self.metrics_config)
+        # progression_reward = 1000 * (metric_dict["sdc_progression"].value - last_metric_dict["sdc_progression"].value)
+        # # progression_reward = self._compute_progression_reward(last_state, state)
+        # progression_reward = jnp.where(
+        #   jnp.dot(movement_vector, dir_ref) > 0,
+        #   progression_reward,
+        #   0) # no reward if the self-driving car is moving in the wrong direction (TODO:signed progression reward)
+        reward = self.compute_reward(last_state, state, dir_ref)
         obs = self.observe(state)
         done = self.check_termination(state)
+        reward = jnp.where(done, reward, reward+0.05)
+        reward = jnp.where(done & jnp.logical_not(state.is_done), reward - 5, reward) # penalize the self-driving car for going off-road
         obs, state = self.post_step(state, obs, done)
         # done = False # for testing
         info = {}
-        return obs, state, progression_reward, done, info
+        return jax.lax.stop_gradient(obs), jax.lax.stop_gradient(state), reward, done, info
 
     def post_step(self, state: PlanningGoKartSimState, obs: jnp.ndarray, done) -> PlanningGoKartSimState:
         """reset the environment if the self-driving car is off-road or the episode is done
@@ -277,19 +279,21 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         )
         return obs, state
 
-    def compute_reward(self, last_state: PlanningGoKartSimState, state: PlanningGoKartSimState) -> jnp.ndarray:
+    def compute_reward(self, last_state: PlanningGoKartSimState, state: PlanningGoKartSimState, dir_ref) -> jnp.ndarray:
         """Computes the reward for the given simulation state.
 
         Args:
-
-          state: Current state of the simulator of shape (...).
+        
+        state: Current state of the simulator of shape (...).
 
         Returns:
-          The reward for the given simulation state.
+        The reward for the given simulation state.
         """
-        metric_dict = self.metrics(state)
-        reward = self.reward_fn(metric_dict)
-        return reward
+        # progression_reward = self._compute_progression_reward(last_state, state)
+        orientation_reward = self._compute_orientation_reward(state, dir_ref)
+        # reward = progression_reward + orientation_reward
+        return orientation_reward
+        # return reward
 
     def _compute_progression_reward(self, last_state: PlanningGoKartSimState,
                                     state: PlanningGoKartSimState) -> jnp.ndarray:
@@ -408,18 +412,39 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         progress = jnp.where(valid, progress, 0.0)
         return progress
 
-    # def _compute_orientation_reward(self, state: PlanningGoKartSimState):
-    #   """Computes the orientation reward.
+    def _compute_orientation_reward(self, state: PlanningGoKartSimState, dir_ref: jnp.ndarray) -> jnp.ndarray:
+        """Computes the orientation reward.
 
-    #   Args:
-    #     state: The current state of the simulator.
+        Args:
+        state: The current state of the simulator.
 
-    #   Returns:
-    #     The orientation reward.
-    #   """
-    #   dir_ref = self.get_ref_direction(state)
+        Returns:
+        The orientation reward.
+        """
+        # shape: (..., num_objects, timesteps=1, 2) -> (..., num_objects, 2)
+        vel_xy = state.current_sim_trajectory.vel_xy[..., 0, :]
 
-    #   return progression_reward
+        # shape: (...,2)
+        sdc_vel_curr = datatypes.select_by_onehot(
+                vel_xy,
+                state.object_metadata.is_sdc,
+                keepdims=False,
+        )
+
+        # shape: (..., num_objects, timesteps=1) -> (..., num_objects)
+        yaw = state.current_sim_trajectory.yaw[..., 0]
+
+        sdc_yaw_curr = datatypes.select_by_onehot(
+                yaw,
+                state.object_metadata.is_sdc,
+                keepdims=False,
+        )
+        yaw_vec = jnp.array([jnp.cos(sdc_yaw_curr), jnp.sin(sdc_yaw_curr)])  # (..., 2)
+        orientation_reward = jnp.dot(yaw_vec, dir_ref)  # (...,)
+        orientation_reward *= jnp.dot(sdc_vel_curr, dir_ref)  # (...,)
+        orientation_reward *= 0.05
+        orientation_reward = jnp.clip(orientation_reward, -0.05, 0.05)
+        return orientation_reward
 
     def get_ref_direction(self, state: PlanningGoKartSimState) -> jnp.ndarray:
         """Get the reference direction of the self-driving car
