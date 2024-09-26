@@ -30,7 +30,7 @@ from waymax.utils.gokart_utils import create_init_state, create_batch_init_state
 #     NormalizeVecReward,
 #     ClipAction,
 # )
-from wrappers import WaymaxLogWrapper, NormalizeVecObservation, NormalizeVecReward
+from rl.wrappers import WaymaxLogWrapper, NormalizeVecObservation, NormalizeVecReward
 
 import waymax
 from waymax.env import GokartRacingEnvironment
@@ -150,8 +150,12 @@ def make_train(config: PPOconfig, viz_cfg):
 
                 # SELECT ACTION
                 rng, _rng = jax.random.split(rng)
+                value: Float[Array, "NUM_ENV"]
+                last_obs: Float[Array, "NUM_ENV NUM_OBS"]
                 pi, value = network.apply(train_state.params, last_obs)
                 # raw_action = pi.sample(seed=_rng)
+                raw_action: Float[Array, "NUM_ENV 3"]
+                log_prob: Float[Array, "NUM_ENV"]
                 raw_action, log_prob = pi.sample_and_log_prob(seed=_rng)
                 action = jnp.clip(raw_action, -1.0, 1.0)  # shape [NUM_ENVS, 3]
                 # jax.debug.print("action: {}", action)
@@ -176,6 +180,7 @@ def make_train(config: PPOconfig, viz_cfg):
                 return runner_state, transition
 
             # traj_batch is collection of Transition
+            # traj_batch.action: Float[Array, "NUM_STEPS NUM_ENV 3"]
             runner_state, traj_batch = jax.lax.scan(
                     _env_step, runner_state, None, config.NUM_STEPS
             )
@@ -217,6 +222,7 @@ def make_train(config: PPOconfig, viz_cfg):
 
                     def _loss_fn(params, traj_batch, gae, targets):
                         # RERUN NETWORK
+                        # traj_batch.obs: Float[Array, "MINIBATCH_SIZE NUM_OBS"]
                         pi, value = network.apply(params, traj_batch.obs)  # shape [MINIBATCH_SIZE]
                         log_prob = pi.log_prob(traj_batch.action)  # retuen NaN !!!! check log prob function!
 
@@ -327,6 +333,7 @@ def make_train(config: PPOconfig, viz_cfg):
             metric["loss/gae"] = gae.mean()
             metric["loss/value_debug"] = value_debug.mean()
             metric["loss/targets_debug"] = targets_debug.mean()
+            metric["debug/diff_dist_proj"] = jnp.min(obs_debug[..., -2])
             metric["debug/proj_distances"] = jnp.min(obs_debug[..., -1])
             metric["debug/pos_yaw"] = pos_yaw
             metric["matrix/obs"] = obs_debug
@@ -363,17 +370,18 @@ def make_train(config: PPOconfig, viz_cfg):
                         "loss/gae"             : info["loss/gae"],
                         "loss/value_debug"     : info["loss/value_debug"],
                         "loss/targets_debug"   : info["loss/targets_debug"],
+                        "debug/diff_dist_proj" : info["debug/diff_dist_proj"],
                         "debug/proj_distances" : info["debug/proj_distances"],
                         "debug/pos_yaw"        : info["debug/pos_yaw"]
                     }
-                    # data_matrix = {
-                    #     "matrix/obs": info["matrix/obs"],
-                    #     "matrix/action": info["matrix/action"]
-                    # }
+                #     data_matrix = {
+                #         "matrix/obs": info["matrix/obs"],
+                #         "matrix/action": info["matrix/action"]
+                #     }
                     wandb.log(data_log, step=info["iteration"])
                     num_updates = int(info["iteration"])
                     # params = jax.device_get(train_state.params)
-                    if num_updates % 100 == 0:
+                    if num_updates % config.EVAL_FREQ == 0:
                         params = info["train/params"]
                         # params = jax.device_get(train_state.params)
                         imgs, _ = evaluate_policy(params, config.NUM_EVAL_STEPS, viz_cfg)
@@ -390,9 +398,9 @@ def make_train(config: PPOconfig, viz_cfg):
                     df_log = pd.concat([df_log, new_row], ignore_index=True)
                     df_log.to_csv(log_path, index=False)
 
-                    # new_matrix = pd.DataFrame([data_matrix])
-                    # df_matrix = pd.concat([df_matrix, new_matrix], ignore_index=True)
-                    # df_matrix.to_csv(log_path_matrix, index=False)
+                #     new_matrix = pd.DataFrame([data_matrix])
+                #     df_matrix = pd.concat([df_matrix, new_matrix], ignore_index=True)
+                #     df_matrix.to_csv(log_path_matrix, index=False)
 
                 # jax.debug.callback(lambda info: callback(info, df_log), metric)
                 jax.debug.callback(callback, metric)

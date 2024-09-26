@@ -7,15 +7,20 @@ class PPOconfig:
     "learning rate"
     NUM_ENVS: int = 100
     "number of parallel environments"
-    NUM_OBS: int = 15
-    "number of observations (single obs stacked over time)"
-    NUM_STEPS: int = 4
+    NUM_OBS: int = 16
+    "dimension of observations"
+    NUM_STEPS: int = 5
     "Num steps * num envs = steps per update"
-    TOTAL_TIMESTEPS: float = 8e5  # 5e7
-    UPDATE_EPOCHS: int = 2  # 2
-    NUM_MINIBATCHES: int = 20  # 32
-    EVAL_FREQ: int = 100
-    NUM_EVAL_STEPS: int = 100
+    TOTAL_TIMESTEPS: float = 1e6  # 5e7
+    "total env steps = num envs * num steps * num updates"
+    UPDATE_EPOCHS: int = 5  # 2
+    "number of epochs per update"
+    NUM_MINIBATCHES: int = 25  # 32
+    "number of minibatches = num envs * num steps / minibatch size"
+    EVAL_FREQ: int = 500
+    "evaluate every EVAL_FREQ updates"
+    NUM_EVAL_STEPS: int = 200
+    "number of steps to evaluate"
     GAMMA: float = 0.99
     GAE_LAMBDA: float = 0.95
     CLIP_EPS: float = 0.2
@@ -23,7 +28,7 @@ class PPOconfig:
     VF_COEF: float = 0.5
     MAX_GRAD_NORM: float = 0.5
     ACTIVATION: str = "tanh"
-    ENV_NAME: str = "hopper"
+    ENV_NAME: str = "gokart"
     ANNEAL_LR: bool = False
     NORMALIZE_ENV: bool = True
     DEBUG: bool = True

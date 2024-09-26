@@ -7,6 +7,7 @@ waymax/rewards/linear_combination_reward_test.py
 waymax/demo_scripts/test.py
 docs/
 rl/logs
+logs/
 wandb/
 __pycache__
 *.egg-info

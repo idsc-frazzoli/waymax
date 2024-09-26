@@ -10,7 +10,23 @@ from waymax.utils.gokart_config import TrackControlPoints
 
 def generate_racing_track(x, y, r, num_points=2001, batch_size=None):
     """
-    #todo: add docstring
+    generate a racing track using the centerline and the radius at each control point
+    including the centerline, left boundary and right boundary
+
+    Args:
+        x: x coordinates of the control points
+        y: y coordinates of the control points
+        r: radius at each control point
+        num_points: number of points to sample on the track (each edge has num_points-1 points)
+        batch_size: batch size (same track for all the batch_size)
+
+    Returns:
+        roadgraph_points: RoadgraphPoints object with x, y, dir_x, dir_y, types, ids, valid 
+                            (dir_x, dir_y are tangent of the centerline and normalized)
+        x_center: x coordinates of the centerline
+        y_center: y coordinates of the centerline
+        cumulative_length: cumulative length of the centerline
+      
     """
     # Calculate tangent and normal vectors for each control point
     x_left = []
