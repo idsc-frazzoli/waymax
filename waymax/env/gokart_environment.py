@@ -16,7 +16,6 @@
 
 import copy
 import dataclasses
-from doctest import debug
 from typing import Sequence
 
 import beartype
@@ -156,8 +155,9 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
                                                                                                   edge_points)
 
         obs = jnp.concatenate(
-                [sdc_xy_curr, jnp.array([sdc_yaw_curr]), sdc_vel_curr, dir_diff, distance_to_edge, debug_value],
+                [sdc_vel_curr, dir_diff, distance_to_edge],
                 axis=-1)  ## add information of the track? + yaw rate
+        # sdc_xy_curr, jnp.array([sdc_yaw_curr]), , debug_value
         return obs
 
     def check_termination(self, state: PlanningGoKartSimState) -> jnp.ndarray:
@@ -311,14 +311,14 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         Returns:
         The reward for the given simulation state.
         """
-        # progression_reward = self._compute_progression_reward(last_state, state)
+        progression_reward = self._compute_progression_reward(last_state, state, dir_ref)
         orientation_reward = self._compute_orientation_reward(state, dir_ref)
-        # reward = progression_reward + orientation_reward
-        return orientation_reward
-        # return reward
+        reward = progression_reward + orientation_reward
+        # return orientation_reward
+        return reward
 
     def _compute_progression_reward(self, last_state: PlanningGoKartSimState,
-                                    state: PlanningGoKartSimState) -> jnp.ndarray:
+                                    state: PlanningGoKartSimState, dir_ref) -> jnp.ndarray:
         """Computes the progression reward.
 
         Args:
@@ -432,6 +432,12 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         progress = curr_dist - last_dist
         valid = jnp.isfinite(min_dist_path)
         progress = jnp.where(valid, progress, 0.0)
+        movement_vector = sdc_xy_curr - sdc_xy_last
+        movement_vector /= jnp.linalg.norm(movement_vector) # normalize the movement vector
+        progress = jnp.where(
+          jnp.dot(movement_vector, dir_ref) > 0.7, # around 45 degree
+          progress,
+          0) # no reward if the self-driving car is moving in the wrong direction (TODO:signed progression reward?)
         return progress
 
     def _compute_orientation_reward(self, state: PlanningGoKartSimState, dir_ref: jnp.ndarray) -> jnp.ndarray:

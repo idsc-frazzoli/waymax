@@ -9,17 +9,17 @@ class PPOconfig:
     "learning rate"
     NUM_ENVS: int = 100
     "number of parallel environments"
-    NUM_OBS: int = 16
+    NUM_OBS: int = 11
     "dimension of observations"
     NUM_STEPS: int = 5
     "Num steps * num envs = steps per update"
-    TOTAL_TIMESTEPS: int = 1e6  # 5e7
+    TOTAL_TIMESTEPS: int = 6e5  # 5e7
     "total env steps = num envs * num steps * num updates"
     UPDATE_EPOCHS: int = 5  # 2
     "number of epochs per update"
     NUM_MINIBATCHES: int = 25  # 32
     "number of minibatches = num envs * num steps / minibatch size"
-    EVAL_FREQ: int = 500
+    EVAL_FREQ: int = 200
     "evaluate every EVAL_FREQ updates"
     NUM_EVAL_STEPS: int = 200
     "number of steps to evaluate"
