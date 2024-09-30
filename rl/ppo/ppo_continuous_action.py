@@ -65,12 +65,12 @@ df_log = pd.DataFrame(columns=["loss/total_loss", "loss/value_loss", "loss/loss_
 # df_matrix = pd.DataFrame(columns=["matrix/obs"])
 
 def make_train(config: PPOconfig, viz_cfg):
-    config.NUM_UPDATES = (
-            config.TOTAL_TIMESTEPS // config.NUM_STEPS // config.NUM_ENVS
-    )
-    config.MINIBATCH_SIZE = (
-            config.NUM_ENVS * config.NUM_STEPS // config.NUM_MINIBATCHES
-    )
+    # config.NUM_UPDATES = (
+    #         config.TOTAL_TIMESTEPS // config.NUM_STEPS // config.NUM_ENVS
+    # )
+    # config.MINIBATCH_SIZE = (
+    #         config.NUM_ENVS * config.NUM_STEPS // config.NUM_MINIBATCHES
+    # )
 
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     log_file = f"data_log_{current_time}.csv"
