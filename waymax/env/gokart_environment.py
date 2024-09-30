@@ -16,6 +16,7 @@
 
 import copy
 import dataclasses
+from doctest import debug
 from typing import Sequence
 
 import beartype
@@ -29,6 +30,8 @@ from jaxtyping import Float, jaxtyped
 from waymax import config as _config, datatypes, dynamics as _dynamics, metrics, rewards
 from waymax.agents import actor_core
 from waymax.env import typedefs as types, PlanningAgentEnvironment
+
+from waymax.utils.gokart_utils import TrackControlPoints, generate_racing_track
 
 typechecker = beartype.beartype
 
@@ -125,9 +128,28 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
 
         edge_points = state.roadgraph_points.xy[..., 2000:,
                       :]  # TODO: for testing, need to find a better way to get the edge points
+        # jax.debug.breakpoint()
+        # for debugging
+        # track_cntrl_points = TrackControlPoints()
+        # roadgraph_points, x_center, y_center, cumulative_length = generate_racing_track(
+        #         track_cntrl_points.x,
+        #         track_cntrl_points.y,
+        #         track_cntrl_points.r)
+        # edge_points = roadgraph_points.xy[2000:, :]
+        # assert jnp.array_equal(edge_points, edge_points_test) 
+
         if len(sdc_xy_curr.shape) == 1:  # no batch dimension
             # edge_points = state.roadgraph_points.xy[is_road_edge]
+            assert len(edge_points.shape) == 2
+        #     jax.debug.print("Shape of edge_points: {}", edge_points.shape)
+        #     jax.debug.print("left edge: {}", edge_points[:5]) 
+        #     jax.debug.print("left edge: {}", edge_points[1994:1999]) 
+        #     jax.debug.print("right edge: {}", edge_points[2000:2005])
+        #     jax.debug.print("right edge: {}", edge_points[-5:])  
+        #     jax.debug.print("sdc_xy_curr: {}", sdc_xy_curr)
             distance_to_edge, _, debug_value = calculate_distances_to_boundary(sdc_xy_curr, sdc_yaw_curr, edge_points)
+        #     jax.debug.print("distance_to_edge: {}", distance_to_edge)
+        #     jax.debug.breakpoint()
         else:
             distance_to_edge, _, _ = jax.vmap(calculate_distances_to_boundary, in_axes=(0, 0, 0))(sdc_xy_curr,
                                                                                                   sdc_yaw_curr,
@@ -205,12 +227,12 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         """Advances simulation by one timestep using the dynamics model.
 
         Args:
-          state: The current state of the simulator of shape (...).
-          action: The action to apply, of shape (..., num_objects).
-          rng: Optional random number generator for stochastic environments.
+        state: The current state of the simulator of shape (...).
+        action: The action to apply, of shape (..., num_objects). 
+        rng: Optional random number generator for stochastic environments.
 
         Returns:
-          The next simulation state after taking an action of shape (...).
+        The next simulation state after taking an action of shape (...).
         """
         # compute reward, currently only progression reward is implemented
         last_state = copy.deepcopy(state)
@@ -221,32 +243,34 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
                 state.object_metadata.is_sdc,
                 keepdims=False,
         )
-
+        
         state = super().step(state, action)
-        current_pos_xy = state.current_sim_trajectory.xy[..., 0, :]
-        # shape: (...,2)
-        current_sdc_xy = datatypes.select_by_onehot(
-                current_pos_xy,
-                state.object_metadata.is_sdc,
-                keepdims=False,
-        )
-        movement_vector = current_sdc_xy - last_sdc_xy
+        # current_pos_xy = state.current_sim_trajectory.xy[..., 0, :]
+        # # shape: (...,2)
+        # current_sdc_xy = datatypes.select_by_onehot(
+        #     current_pos_xy,
+        #     state.object_metadata.is_sdc,
+        #     keepdims=False,
+        # )
+        # movement_vector = current_sdc_xy - last_sdc_xy
         dir_ref = self.get_ref_direction(state)
-        last_metric_dict = metrics.run_metrics(last_state, self.metrics_config)
-        metric_dict = metrics.run_metrics(state, self.metrics_config)
-        progression_reward = 1000 * (metric_dict["sdc_progression"].value - last_metric_dict["sdc_progression"].value)
-        # progression_reward = self._compute_progression_reward(last_state, state)
-        progression_reward = jnp.where(
-                jnp.dot(movement_vector, dir_ref) > 0,
-                progression_reward,
-                0)  # no reward if the self-driving car is moving in the wrong direction (TODO:signed progression reward)
-
+        # last_metric_dict = metrics.run_metrics(last_state, self.metrics_config)
+        # metric_dict = metrics.run_metrics(state, self.metrics_config)
+        # progression_reward = 1000 * (metric_dict["sdc_progression"].value - last_metric_dict["sdc_progression"].value)
+        # # progression_reward = self._compute_progression_reward(last_state, state)
+        # progression_reward = jnp.where(
+        #   jnp.dot(movement_vector, dir_ref) > 0,
+        #   progression_reward,
+        #   0) # no reward if the self-driving car is moving in the wrong direction (TODO:signed progression reward)
+        reward = self.compute_reward(last_state, state, dir_ref)
         obs = self.observe(state)
         done = self.check_termination(state)
+        # reward = jnp.where(done, reward, reward+0.05) # encourage the self-driving car to stay on the track
+        reward = jnp.where(done & jnp.logical_not(state.is_done), reward - 5, reward) # penalize the self-driving car for going off-road
         obs, state = self.post_step(state, obs, done)
         # done = False # for testing
         info = {}
-        return obs, state, progression_reward, done, info
+        return jax.lax.stop_gradient(obs), jax.lax.stop_gradient(state), reward, done, info
 
     def post_step(self, state: PlanningGoKartSimState, obs: jnp.ndarray, done) -> PlanningGoKartSimState:
         """reset the environment if the self-driving car is off-road or the episode is done
@@ -277,19 +301,21 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         )
         return obs, state
 
-    def compute_reward(self, last_state: PlanningGoKartSimState, state: PlanningGoKartSimState) -> jnp.ndarray:
+    def compute_reward(self, last_state: PlanningGoKartSimState, state: PlanningGoKartSimState, dir_ref) -> jnp.ndarray:
         """Computes the reward for the given simulation state.
 
         Args:
-
-          state: Current state of the simulator of shape (...).
+        
+        state: Current state of the simulator of shape (...).
 
         Returns:
-          The reward for the given simulation state.
+        The reward for the given simulation state.
         """
-        metric_dict = self.metrics(state)
-        reward = self.reward_fn(metric_dict)
-        return reward
+        # progression_reward = self._compute_progression_reward(last_state, state)
+        orientation_reward = self._compute_orientation_reward(state, dir_ref)
+        # reward = progression_reward + orientation_reward
+        return orientation_reward
+        # return reward
 
     def _compute_progression_reward(self, last_state: PlanningGoKartSimState,
                                     state: PlanningGoKartSimState) -> jnp.ndarray:
@@ -408,18 +434,39 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         progress = jnp.where(valid, progress, 0.0)
         return progress
 
-    # def _compute_orientation_reward(self, state: PlanningGoKartSimState):
-    #   """Computes the orientation reward.
+    def _compute_orientation_reward(self, state: PlanningGoKartSimState, dir_ref: jnp.ndarray) -> jnp.ndarray:
+        """Computes the orientation reward. TODO more detialed
 
-    #   Args:
-    #     state: The current state of the simulator.
+        Args:
+        state: The current state of the simulator.
 
-    #   Returns:
-    #     The orientation reward.
-    #   """
-    #   dir_ref = self.get_ref_direction(state)
+        Returns:
+        The orientation reward.
+        """
+        # shape: (..., num_objects, timesteps=1, 2) -> (..., num_objects, 2)
+        vel_xy = state.current_sim_trajectory.vel_xy[..., 0, :]
 
-    #   return progression_reward
+        # shape: (...,2)
+        sdc_vel_curr = datatypes.select_by_onehot(
+                vel_xy,
+                state.object_metadata.is_sdc,
+                keepdims=False,
+        )
+
+        # shape: (..., num_objects, timesteps=1) -> (..., num_objects)
+        yaw = state.current_sim_trajectory.yaw[..., 0]
+
+        sdc_yaw_curr = datatypes.select_by_onehot(
+                yaw,
+                state.object_metadata.is_sdc,
+                keepdims=False,
+        )
+        yaw_vec = jnp.array([jnp.cos(sdc_yaw_curr), jnp.sin(sdc_yaw_curr)])  # (..., 2)
+        orientation_reward = jnp.dot(yaw_vec, dir_ref)  # (...,)
+        orientation_reward *= jnp.dot(sdc_vel_curr, dir_ref)  # (...,)
+        orientation_reward *= 0.05
+        orientation_reward = jnp.clip(orientation_reward, -0.05, 0.05)
+        return orientation_reward
 
     def get_ref_direction(self, state: PlanningGoKartSimState) -> jnp.ndarray:
         """Get the reference direction of the self-driving car
@@ -498,7 +545,7 @@ def calculate_distances_to_boundary(
     """
 
     # checked_fn = checkify.checkify(check_greater)
-
+    # jax.debug.breakpoint()    
     angles = jnp.linspace(-jnp.pi / 2, jnp.pi / 2, num_rays)
     rotated_angles = car_yaw + angles
     ray_directions: Float[Array, "2 nRays"] = jnp.array([jnp.cos(rotated_angles), jnp.sin(rotated_angles)])
@@ -510,8 +557,11 @@ def calculate_distances_to_boundary(
     # error.throw()
     # perpendicular_distances = jnp.sqrt(distances_to_points**2 - projections**2)  # (N, num_rays)
     # TODO reproduce the error, check boundary points
-    boundary2rays: Float[Array, "N nRays"] = jnp.min(
-            boundary2car_dist ** 2 - projections ** 2)
+    boundary2car_dist_repeated: Float[Array, "N nRays"] = jnp.repeat(boundary2car_dist, repeats=num_rays, axis=1)  # (N, 8)
+    boundary2rays: Float[Array, "N nRays"] = (boundary2car_dist_repeated + 1e-6) ** 2 - projections ** 2
+    # tested: min(abs(boundary2car_dist_repeated) - abs(projections)) ~= -9.536e-07 numerical error???
+    debug_values1 = jnp.min(abs(boundary2car_dist_repeated) - abs(projections))
+    debug_values2 = jnp.min(boundary2rays)
 
     perpendicular_distances = jnp.sqrt(jnp.maximum(boundary2rays, 0))
     # TODO log the value!!! (N, num_rays) CAR OUTSIDE THE TRACK
@@ -520,9 +570,10 @@ def calculate_distances_to_boundary(
     valid_projections = jnp.where(valid_mask, projections, jnp.inf)  # (N, num_rays)
 
     distances: Float[Array, "nRays"] = jnp.min(valid_projections, axis=0)  # (num_rays,)
+#     jax.debug.breakpoint() 
     hit_points: Float[Array, "nRays 2"] = car_position + ray_directions.T * distances[:, None]  # (num_rays, 2)
 
-    return distances, hit_points, jnp.array([boundary2rays])
+    return distances, hit_points, jnp.array([debug_values1, debug_values2])
 
 
 def get_edge_points(roadgraph_points_pos, roadgraph_points_types) -> Float[Array, "N 2"]:
