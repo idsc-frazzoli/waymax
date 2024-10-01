@@ -439,10 +439,12 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         return progress
 
     def _compute_orientation_reward(self, state: PlanningGoKartSimState, dir_ref: jnp.ndarray) -> jnp.ndarray:
-        """Computes the orientation reward. TODO more detialed
+        """Computes the orientation reward. The car is rewarded for moving in the direction of the nearest point on the reference track(centerline).
+        This reward is also scaled by the velocity of the car in the direction of the reference track.
 
         Args:
         state: The current state of the simulator.
+        dir_ref: The reference direction of the self-driving car.
 
         Returns:
         The orientation reward.
@@ -474,6 +476,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
 
     def get_ref_direction(self, state: PlanningGoKartSimState) -> jnp.ndarray:
         """Get the reference direction of the self-driving car
+        take the direction of the nearest point on the track as the reference direction
 
         Args:
           state: The current state of the simulator

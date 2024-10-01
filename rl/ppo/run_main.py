@@ -7,7 +7,7 @@ from rl.ppo.config import VizConfig, PPOconfig
 from rl.ppo.ppo_continuous_action import make_train
 
 jax.config.update("jax_debug_nans", True)
-jax.config.update("jax_disable_jit", True)
+# jax.config.update("jax_disable_jit", True)
 
 if __name__ == "__main__":
     config = PPOconfig()
@@ -16,7 +16,7 @@ if __name__ == "__main__":
     wandb.init(
             project="GokartRL-PPO",
             config=dataclasses.asdict(config),
-            mode="disabled")
+            mode="online")
 
     rng = jax.random.PRNGKey(config.SEED)
     # train_jit = jax.jit(make_train(config, viz_cfg))

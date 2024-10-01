@@ -95,7 +95,7 @@ def make_train(config: PPOconfig, viz_cfg):
         )
 
         # INIT ENV
-        env_state = create_batch_init_state(batch_size=config.NUM_ENVS)
+        env_state = create_batch_init_state(batch_size=config.NUM_ENVS, num_timesteps=config.MAX_EPISODE_LENGTH)
 
         # rng, _rng = jax.random.split(rng)
         # reset_rng = jax.random.split(_rng, config.NUM_ENVS)
@@ -346,7 +346,7 @@ def make_train(config: PPOconfig, viz_cfg):
                     if num_updates % config.EVAL_FREQ == 0:
                         params = info["train/params"]
                         # params = jax.device_get(train_state.params)
-                        imgs, _ = evaluate_policy(params, config.NUM_EVAL_STEPS, viz_cfg)
+                        imgs, _ = evaluate_policy(params, config.MAX_EPISODE_LENGTH, viz_cfg)
                         imgs_np = np.stack(imgs, axis=0)
                         wandb.log({
                             f"Iteration {num_updates}": wandb.Video(
@@ -416,6 +416,7 @@ def evaluate_policy(params, num_eval_steps, viz_cfg):
         action = pi.mean()
         waymax_action = datatypes.Action(data=action, valid=jnp.array([True]))
         imgs.append(visualization.plot_simulator_state(eval_state.env_state, use_log_traj=False, viz_config=viz_cfg))
+        # jax.debug.breakpoint()
         obs, eval_state, reward, done, info = eval_env.step(eval_state, waymax_action)
         action_list.append(action)
         reward_list.append(reward.item())
