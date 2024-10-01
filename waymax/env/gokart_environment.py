@@ -26,11 +26,9 @@ from jax import Array
 from jax.experimental import checkify
 from jaxtyping import Float, jaxtyped
 
-from waymax import config as _config, datatypes, dynamics as _dynamics, metrics, rewards
+from waymax import config as _config, datatypes, dynamics as _dynamics, rewards
 from waymax.agents import actor_core
 from waymax.env import typedefs as types, PlanningAgentEnvironment
-
-from waymax.utils.gokart_utils import TrackControlPoints, generate_racing_track
 
 typechecker = beartype.beartype
 

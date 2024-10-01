@@ -13,15 +13,8 @@ from jax import Array
 from jaxtyping import Float
 
 from rl.ppo.config import PPOconfig
+from rl.ppo.env_factory import get_environment
 from rl.ppo.structures import ActorCritic, Transition
-from rl.wrappers import WaymaxLogWrapper
-from waymax import config as _config, datatypes, visualization
-from waymax.agents import actor_core
-from waymax.dynamics.tricycle_model import TricycleModel
-from waymax.env import GokartRacingEnvironment
-from waymax.utils.gokart_config import GoKartGeometry, TricycleParams, PajieckaParams
-from waymax.utils.gokart_utils import create_init_state, create_batch_init_state
-
 # from wrappers import (
 #     LogWrapper,
 #     BraxGymnaxWrapper,
@@ -30,21 +23,13 @@ from waymax.utils.gokart_utils import create_init_state, create_batch_init_state
 #     NormalizeVecReward,
 #     ClipAction,
 # )
-from rl.wrappers import WaymaxLogWrapper, NormalizeVecObservation, NormalizeVecReward
-
-import waymax
-from waymax.env import GokartRacingEnvironment
-from waymax import config as _config, datatypes
-from waymax.dynamics.tricycle_model import TricycleModel
-from waymax.utils.gokart_utils import create_init_state, create_batch_init_state
-from waymax.utils.gokart_config import GoKartGeometry, TricycleParams, PajieckaParams
+from rl.wrappers import WaymaxLogWrapper
+from waymax import config as _config, datatypes, visualization
 from waymax.agents import actor_core
-from waymax import visualization
-
-import pandas as pd
-from datetime import datetime
-import os
-
+from waymax.dynamics.tricycle_model import TricycleModel
+from waymax.env import GokartRacingEnvironment
+from waymax.utils.gokart_config import GoKartGeometry, TricycleParams, PajieckaParams
+from waymax.utils.gokart_utils import create_init_state, create_batch_init_state
 
 # TODO:
 # 1. env.reset() returns a tuple of (observation, env_state)
@@ -57,20 +42,12 @@ import os
 # 8. reset the environment individually
 # 9. implement the debug modules
 
-jax.config.update("jax_debug_nans", True)
-
 df_log = pd.DataFrame(columns=["loss/total_loss", "loss/value_loss", "loss/loss_actor", "loss/entropy"])
 
 
 # df_matrix = pd.DataFrame(columns=["matrix/obs"])
 
 def make_train(config: PPOconfig, viz_cfg):
-    # config.NUM_UPDATES = (
-    #         config.TOTAL_TIMESTEPS // config.NUM_STEPS // config.NUM_ENVS
-    # )
-    # config.MINIBATCH_SIZE = (
-    #         config.NUM_ENVS * config.NUM_STEPS // config.NUM_MINIBATCHES
-    # )
 
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     log_file = f"data_log_{current_time}.csv"
@@ -81,29 +58,13 @@ def make_train(config: PPOconfig, viz_cfg):
     log_path = os.path.join(log_dir, log_file)
     log_path_matrix = os.path.join(log_dir, log_file_matrix)
 
-    # env, env_params = BraxGymnaxWrapper(config.ENV_NAME"]), None
-    # env = LogWrapper(env)
-    # env = ClipAction(env)
-    # env = VecEnv(env)
-    # if config.NORMALIZE_ENV"]:
-    #     env = NormalizeVecObservation(env)
-    #     env = NormalizeVecReward(env, config.GAMMA)
 
-    dynamics_model = TricycleModel(gk_geometry=GoKartGeometry(), model_params=TricycleParams(),
-                                   paj_params=PajieckaParams(), dt=0.1)
 
-    env = GokartRacingEnvironment(
-            dynamics_model=dynamics_model,
-            config=dataclasses.replace(
-                    _config.EnvironmentConfig(),
-                    max_num_objects=1,
-                    init_steps=1  # => state.timestep = 0
-            ),
-    )
+
+    # todo move this part as well to the env factory
+    env = get_environment(config)
     env = WaymaxLogWrapper(env)
-    # if config["NORMALIZE_ENV"]:
-    #     env = NormalizeVecObservation(env)
-    #     env = NormalizeVecReward(env, config["GAMMA"])
+
 
     def linear_schedule(count):
         frac = (1.0 - (count // (config.NUM_MINIBATCHES * config.UPDATE_EPOCHS)) / config.NUM_UPDATES)
@@ -232,6 +193,7 @@ def make_train(config: PPOconfig, viz_cfg):
                         ).clip(-config.CLIP_EPS, config.CLIP_EPS)
                         value_losses = jnp.square(value - targets)  # shape [MINIBATCH_SIZE]
                         value_losses_clipped = jnp.square(value_pred_clipped - targets)
+
                         value_loss = (
                                 0.5 * jnp.maximum(value_losses, value_losses_clipped).mean()
                         )
@@ -354,7 +316,7 @@ def make_train(config: PPOconfig, viz_cfg):
                     #     print(
                     #         f"global step={timesteps[t]}, episodic return={return_values[t]}"
                     #     )
-                    # info["returned_episode_returns"] # shape [NUM_STEPS, NUM_ENVS] 
+                    # info["returned_episode_returns"] # shape [NUM_STEPS, NUM_ENVS]
                     data_log = {
                         # "iteration": info["iteration"],
                         "reward/episode_return": info["returned_episode_returns"].mean(-1).reshape(-1)[-1],
@@ -390,7 +352,7 @@ def make_train(config: PPOconfig, viz_cfg):
                             f"Iteration {num_updates}": wandb.Video(
                                     np.moveaxis(imgs_np, -1, 1),
                                     fps=10,
-                                    format="gif",
+                                    format="mp4",
                             )
                         })
 
