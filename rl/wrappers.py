@@ -9,7 +9,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from waymax.env import PlanningGoKartSimState
-from waymax.env import GokartRacingEnvironment
+from waymax.env import PlanningAgentEnvironment
 from waymax import datatypes
 
 class JaxWrapper(object):
@@ -31,7 +31,7 @@ class LogEnvState:
     returned_episode_lengths: int
 
 class WaymaxLogWrapper(JaxWrapper):
-    def __init__(self, env: GokartRacingEnvironment):
+    def __init__(self, env: PlanningAgentEnvironment):
         super().__init__(env)
 
     @partial(jax.jit, static_argnums=(0,))

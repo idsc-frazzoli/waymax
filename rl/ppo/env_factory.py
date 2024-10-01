@@ -1,9 +1,9 @@
 import dataclasses
 
-from dynamics.tricycle_model import TricycleModel
-from env import PlanningAgentEnvironment, GokartRacingEnvironment
+from waymax.dynamics.tricycle_model import TricycleModel
+from waymax.env import PlanningAgentEnvironment, GokartRacingEnvironment
 from rl.ppo.config import PPOconfig
-from utils.gokart_config import GoKartGeometry, PajieckaParams, TricycleParams
+from waymax.utils.gokart_config import GoKartGeometry, PajieckaParams, TricycleParams
 from waymax import config as _config
 
 
@@ -21,8 +21,8 @@ def get_environment(config: PPOconfig) -> PlanningAgentEnvironment:
                 ),
         )
     elif config.ENV_NAME == "waymax":
-
         # todo
+        pass
     else:
         raise ValueError(f"Unsupported environment {config.ENV_NAME}")
     return env

@@ -45,6 +45,10 @@ import pandas as pd
 from datetime import datetime
 import os
 
+from waymax.dynamics.bicycle_model import InvertibleBicycleModel
+from waymax.dynamics import StateDynamics
+from waymax.env import PlanningAgentEnvironment
+from waymax import agents
 
 # TODO:
 # 1. env.reset() returns a tuple of (observation, env_state)
@@ -76,7 +80,9 @@ def make_train(config: PPOconfig, viz_cfg):
     log_file = f"data_log_{current_time}.csv"
     log_file_matrix = f"matrix_log_{current_time}.csv"
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    log_dir = os.path.join(script_dir, "logs")
+    log_dir = os.path.join(script_dir, config.ENV_NAME + "logs")
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
 
     log_path = os.path.join(log_dir, log_file)
     log_path_matrix = os.path.join(log_dir, log_file_matrix)
@@ -89,6 +95,7 @@ def make_train(config: PPOconfig, viz_cfg):
     #     env = NormalizeVecObservation(env)
     #     env = NormalizeVecReward(env, config.GAMMA)
 
+    #TODO: (tian) env_factory with changed reward in config
     dynamics_model = TricycleModel(gk_geometry=GoKartGeometry(), model_params=TricycleParams(),
                                    paj_params=PajieckaParams(), dt=0.1)
 
@@ -99,6 +106,19 @@ def make_train(config: PPOconfig, viz_cfg):
                     max_num_objects=1,
                     init_steps=1  # => state.timestep = 0
             ),
+    )
+    dynamics_model = InvertibleBicycleModel()
+    env = PlanningAgentEnvironment(
+        dynamics_model=dynamics_model,
+        config=dataclasses.replace(
+                _config.EnvironmentConfig(),
+                max_num_objects=32,
+        ),
+        sim_agent_actors=[agents.create_expert_actor(
+                dynamics_model=StateDynamics(),
+                is_controlled_func=lambda state: not state.object_metadata.is_sdc,
+        )],
+        sim_agent_params=[None],
     )
     env = WaymaxLogWrapper(env)
     # if config["NORMALIZE_ENV"]:
