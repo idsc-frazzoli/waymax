@@ -320,6 +320,9 @@ def make_train(config: PPOconfig, viz_cfg):
                     data_log = {
                         # "iteration": info["iteration"],
                         "reward/episode_return": info["returned_episode_returns"].mean(-1).reshape(-1)[-1],
+                        "reward/episode_progression_return": info["returned_progression_returns"].mean(-1).reshape(-1)[-1],
+                        "reward/episode_orientation_return": info["returned_orientation_returns"].mean(-1).reshape(-1)[-1],
+                        "reward/episode_offroad_return": info["returned_offroad_returns"].mean(-1).reshape(-1)[-1],
                         "loss/total_loss"      : info["loss/total_loss"],
                         "loss/value_loss"      : info["loss/value_loss"],
                         "loss/loss_actor"      : info["loss/loss_actor"],
@@ -406,6 +409,8 @@ def evaluate_policy(params, num_eval_steps, viz_cfg):
     obs, eval_state = eval_env.reset(eval_state)
 
     total_reward = 0.0
+    progression_reward = 0.0
+    orientation_reward = 0.0
     reward_list = [0]
     action_list = []
     for _ in range(num_eval_steps):
