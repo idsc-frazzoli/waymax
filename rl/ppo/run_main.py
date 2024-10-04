@@ -8,6 +8,7 @@ from rl.ppo.ppo_continuous_action import make_train
 
 jax.config.update("jax_debug_nans", True)
 jax.config.update("jax_disable_jit", True)
+jax.config.update("jax_traceback_filtering", "off")
 
 if __name__ == "__main__":
     config = PPOconfig()

@@ -184,6 +184,7 @@ def make_train(config: PPOconfig, viz_cfg):
                     def _loss_fn(params, traj_batch, gae, targets):
                         # RERUN NETWORK
                         # traj_batch.obs: Float[Array, "MINIBATCH_SIZE NUM_OBS"]
+                        jax.debug.print("obs: {}", traj_batch.obs)
                         pi, value = network.apply(params, traj_batch.obs)  # shape [MINIBATCH_SIZE]
                         log_prob = pi.log_prob(traj_batch.action)  # retuen NaN !!!! check log prob function!
 

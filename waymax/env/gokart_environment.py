@@ -152,6 +152,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
                                                                                                   sdc_yaw_curr,
                                                                                                   edge_points)
 
+
         obs = jnp.concatenate(
                 [sdc_vel_curr, dir_diff, distance_to_edge],
                 axis=-1)  ## add information of the track? + yaw rate
@@ -530,7 +531,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
 @jaxtyped(typechecker=typechecker)
 def calculate_distances_to_boundary(
         car_position: Float[Array, "2"],
-        car_yaw: Float[Array, ""],
+        car_yaw: Float[Array, "1"],
         boundary_points: Float[Array, "N 2"],
         num_rays: int = 8,
         max_distance: float = 0.1):
@@ -547,6 +548,8 @@ def calculate_distances_to_boundary(
     distances: distance to boundary in different directions    shape (num_rays,)
     hit_points: points of intersections of rays and boundary    shape (num_rays, 2)
     """
+    jax.debug.print("car_position: {}", car_position)
+    jax.debug.print("car_yaw: {}", car_yaw)
 
     # checked_fn = checkify.checkify(check_greater)
     # jax.debug.breakpoint()    
@@ -566,6 +569,8 @@ def calculate_distances_to_boundary(
     # tested: min(abs(boundary2car_dist_repeated) - abs(projections)) ~= -9.536e-07 numerical error???
     debug_values1 = jnp.min(abs(boundary2car_dist_repeated) - abs(projections))
     debug_values2 = jnp.min(boundary2rays)
+    jax.debug.print("debug_values1: {}", debug_values1)
+    jax.debug.print("debug_values2: {}", debug_values2)
 
     perpendicular_distances = jnp.sqrt(jnp.maximum(boundary2rays, 0))
     # TODO log the value!!! (N, num_rays) CAR OUTSIDE THE TRACK
@@ -577,6 +582,7 @@ def calculate_distances_to_boundary(
 #     jax.debug.breakpoint() 
     hit_points: Float[Array, "nRays 2"] = car_position + ray_directions.T * distances[:, None]  # (num_rays, 2)
 
+    jax.debug.print("distances: {}", distances)
     return distances, hit_points, jnp.array([debug_values1, debug_values2])
 
 
