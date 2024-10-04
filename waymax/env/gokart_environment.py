@@ -212,6 +212,15 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         state = PlanningGoKartSimState(**state)
         if rng is not None:
             keys = jax.random.split(rng, len(self._sim_agent_actors))
+            num_init_points = state.sdc_paths.num_points_per_path
+            init_index = jax.random.randint(rng, (), 0, num_init_points)
+            init_pos = state.sdc_paths.xy[..., 0, init_index, :]
+            init_orint = state.sdc_paths.dir_xy[..., 0, init_index, :]
+            init_yaw = jnp.arctan2(init_orint[..., 1], init_orint[..., 0])
+            state.sim_trajectory.x = state.sim_trajectory.x.at[..., 0, 0].set(init_pos[0])
+            state.sim_trajectory.y = state.sim_trajectory.y.at[..., 0, 0].set(init_pos[1])
+            state.sim_trajectory.yaw = state.sim_trajectory.yaw.at[..., 0, 0].set(init_yaw)
+
         else:
             keys = [None] * len(self._sim_agent_actors)
         init_actor_states = [
@@ -261,14 +270,15 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         #   jnp.dot(movement_vector, dir_ref) > 0,
         #   progression_reward,
         #   0) # no reward if the self-driving car is moving in the wrong direction (TODO:signed progression reward)
-        reward = self.compute_reward(last_state, state, dir_ref)
+        # reward, reward_dict = self.compute_reward(last_state, state, dir_ref)
         obs = self.observe(state)
         done = self.check_termination(state)
+        reward, reward_dict = self.compute_reward(last_state, state, dir_ref, done)
         # reward = jnp.where(done, reward, reward+0.05) # encourage the self-driving car to stay on the track
-        reward = jnp.where(done & jnp.logical_not(state.is_done), reward - 5, reward) # penalize the self-driving car for going off-road
+        # reward = jnp.where(done & jnp.logical_not(state.is_done), reward - 5, reward) # penalize the self-driving car for going off-road
         obs, state = self.post_step(state, obs, done)
         # done = False # for testing
-        info = {}
+        info = reward_dict
         return jax.lax.stop_gradient(obs), jax.lax.stop_gradient(state), reward, done, info
 
     def post_step(self, state: PlanningGoKartSimState, obs: jnp.ndarray, done) -> PlanningGoKartSimState:
@@ -300,21 +310,29 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         )
         return obs, state
 
-    def compute_reward(self, last_state: PlanningGoKartSimState, state: PlanningGoKartSimState, dir_ref) -> jnp.ndarray:
+    def compute_reward(self, last_state: PlanningGoKartSimState, state: PlanningGoKartSimState, dir_ref, done) -> jnp.ndarray:
         """Computes the reward for the given simulation state.
 
         Args:
-        
-        state: Current state of the simulator of shape (...).
+        last_state: The last state of the simulator.
+        state: Current state of the simulator .
+        dir_ref: The reference direction of the self-driving car.
+        done: A boolean indicating if the episode should terminate
 
         Returns:
         The reward for the given simulation state.
         """
         progression_reward = self._compute_progression_reward(last_state, state, dir_ref)
         orientation_reward = self._compute_orientation_reward(state, dir_ref)
-        reward = progression_reward + orientation_reward
-        # return orientation_reward
-        return reward
+        offboard_reward = self._compute_offroad_reward(state, done)
+        reward = progression_reward + orientation_reward + offboard_reward
+        reward_dict = {
+                "progression_reward": progression_reward,
+                "orientation_reward": orientation_reward,
+                "offroad_reward": offboard_reward
+        }
+        # reward = orientation_reward
+        return reward, reward_dict
 
     def _compute_progression_reward(self, last_state: PlanningGoKartSimState,
                                     state: PlanningGoKartSimState, dir_ref) -> jnp.ndarray:
@@ -437,13 +455,20 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
           jnp.dot(movement_vector, dir_ref) > 0.7, # around 45 degree
           progress,
           0) # no reward if the self-driving car is moving in the wrong direction (TODO:signed progression reward?)
+        path_length = state.sdc_paths.arc_length[..., 0, -1]
+
+        # check if the car has reached the end of the path (in this case, the progress is negative, so we need to add the path length)
+        # a small progress 0.1 between the last point and the first point of the path
+        progress = jnp.where(progress < -path_length / 2, path_length + progress + 0.1, progress)
         return progress
 
     def _compute_orientation_reward(self, state: PlanningGoKartSimState, dir_ref: jnp.ndarray) -> jnp.ndarray:
-        """Computes the orientation reward. TODO more detialed
+        """Computes the orientation reward. The car is rewarded for moving in the direction of the nearest point on the reference track(centerline).
+        This reward is also scaled by the velocity of the car in the direction of the reference track.
 
         Args:
         state: The current state of the simulator.
+        dir_ref: The reference direction of the self-driving car.
 
         Returns:
         The orientation reward.
@@ -472,9 +497,18 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         orientation_reward *= 0.05
         orientation_reward = jnp.clip(orientation_reward, -0.05, 0.05)
         return orientation_reward
+    
+    def _compute_offroad_reward(self, state: PlanningGoKartSimState, done) -> jnp.ndarray:
+        """"
+        Computes the offroad reward. The car is penalized for going off-road.
+        """
+        # state.is_done indicates the max. episode length is reached, not off-road
+        offroad_reward = jnp.where(done & jnp.logical_not(state.is_done), - 5, 0) 
+        return offroad_reward
 
     def get_ref_direction(self, state: PlanningGoKartSimState) -> jnp.ndarray:
         """Get the reference direction of the self-driving car
+        take the direction of the nearest point on the track as the reference direction
 
         Args:
           state: The current state of the simulator

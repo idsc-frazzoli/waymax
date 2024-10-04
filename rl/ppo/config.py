@@ -7,22 +7,22 @@ from chex import dataclass
 class PPOconfig:
     LR: float = 3e-4
     "learning rate"
+    MAX_EPISODE_LENGTH: int = 300
+    "number of max steps per episode"
     NUM_ENVS: int = 100
     "number of parallel environments"
     NUM_OBS: int = 11
     "dimension of observations"
-    NUM_STEPS: int = 5
+    NUM_STEPS: int = 5 #5
     "Num steps * num envs = steps per update (i.e. length of trajectory)"
     TOTAL_TIMESTEPS: int = 6e5  # 5e7
     "total env steps = num envs * num steps * num updates"
-    UPDATE_EPOCHS: int = 5  # 2
+    UPDATE_EPOCHS: int = 5  # 5
     "number of epochs per update"
-    NUM_MINIBATCHES: int = 25  # 32
+    NUM_MINIBATCHES: int = 25  # 25
     "number of minibatches = num envs * num steps / minibatch size"
     EVAL_FREQ: int = 200
     "evaluate every EVAL_FREQ updates"
-    NUM_EVAL_STEPS: int = 200
-    "number of steps to evaluate"
     GAMMA: float = 0.99
     GAE_LAMBDA: float = 0.95
     "generalized advantage estimation lambda"
