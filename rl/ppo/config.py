@@ -7,7 +7,7 @@ class PPOconfig:
     "learning rate"
     NUM_ENVS: int = 100
     "number of parallel environments"
-    NUM_OBS: int = 16
+    NUM_OBS: int = 2034
     "dimension of observations"
     NUM_STEPS: int = 5
     "Num steps * num envs = steps per update"
@@ -17,9 +17,9 @@ class PPOconfig:
     "number of epochs per update"
     NUM_MINIBATCHES: int = 25  # 32
     "number of minibatches = num envs * num steps / minibatch size"
-    EVAL_FREQ: int = 500
+    EVAL_FREQ: int = 400
     "evaluate every EVAL_FREQ updates"
-    NUM_EVAL_STEPS: int = 200
+    NUM_EVAL_STEPS: int = 80
     "number of steps to evaluate"
     GAMMA: float = 0.99
     GAE_LAMBDA: float = 0.95
@@ -28,7 +28,7 @@ class PPOconfig:
     VF_COEF: float = 0.5
     MAX_GRAD_NORM: float = 0.5
     ACTIVATION: str = "tanh"
-    ENV_NAME: str = "gokart"
+    ENV_NAME: str = "waymax"
     ANNEAL_LR: bool = False
     NORMALIZE_ENV: bool = True
     DEBUG: bool = True

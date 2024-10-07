@@ -60,6 +60,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
             sim_agent_params: Sequence[actor_core.Params] = (),
     ) -> None:
         super().__init__(dynamics_model, config, sim_agent_actors, sim_agent_params)
+        self._state_dynamics = _dynamics.GoKartStateDynamics()
         self.metrics_config = dataclasses.replace(_config.MetricsConfig(),
                                                   metrics_to_run=("offroad", "sdc_progression"))
         reward_config = _config.LinearCombinationRewardConfig(rewards={'offroad': -1.0, 'sdc_progression': 10.0})

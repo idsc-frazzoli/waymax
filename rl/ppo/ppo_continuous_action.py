@@ -21,6 +21,7 @@ from waymax.dynamics.tricycle_model import TricycleModel
 from waymax.env import GokartRacingEnvironment
 from waymax.utils.gokart_config import GoKartGeometry, TricycleParams, PajieckaParams
 from waymax.utils.gokart_utils import create_init_state, create_batch_init_state
+from waymax.utils.waymax_utils import replicate_init_state_to_form_batch
 
 # from wrappers import (
 #     LogWrapper,
@@ -30,7 +31,7 @@ from waymax.utils.gokart_utils import create_init_state, create_batch_init_state
 #     NormalizeVecReward,
 #     ClipAction,
 # )
-from rl.wrappers import WaymaxLogWrapper, NormalizeVecObservation, NormalizeVecReward
+from rl.wrappers import WaymaxLogWrapper, WaymaxLogWrapperTest, NormalizeVecObservation, NormalizeVecReward
 
 import waymax
 from waymax.env import GokartRacingEnvironment
@@ -49,6 +50,8 @@ from waymax.dynamics.bicycle_model import InvertibleBicycleModel
 from waymax.dynamics import StateDynamics
 from waymax.env import PlanningAgentEnvironment
 from waymax import agents
+from waymax.config import LinearCombinationRewardConfig
+from waymax import dataloader
 
 # TODO:
 # 1. env.reset() returns a tuple of (observation, env_state)
@@ -96,31 +99,41 @@ def make_train(config: PPOconfig, viz_cfg):
     #     env = NormalizeVecReward(env, config.GAMMA)
 
     #TODO: (tian) env_factory with changed reward in config
-    dynamics_model = TricycleModel(gk_geometry=GoKartGeometry(), model_params=TricycleParams(),
-                                   paj_params=PajieckaParams(), dt=0.1)
+    #TODO: (tian) possibly changed observation in config also
+    #TODO: (tian) possibly need a new wrapper or a new environment
+    if config.ENV_NAME == 'gokart':
+        dynamics_model = TricycleModel(gk_geometry=GoKartGeometry(), model_params=TricycleParams(),
+                                        paj_params=PajieckaParams(), dt=0.1)
 
-    env = GokartRacingEnvironment(
-            dynamics_model=dynamics_model,
-            config=dataclasses.replace(
-                    _config.EnvironmentConfig(),
-                    max_num_objects=1,
-                    init_steps=1  # => state.timestep = 0
-            ),
-    )
-    dynamics_model = InvertibleBicycleModel()
-    env = PlanningAgentEnvironment(
+        env = GokartRacingEnvironment(
+                dynamics_model=dynamics_model,
+                config=dataclasses.replace(
+                        _config.EnvironmentConfig(),
+                        max_num_objects=1,
+                        init_steps=1  # => state.timestep = 0
+                ),
+        )
+        env = WaymaxLogWrapper(env)
+    elif config.ENV_NAME == 'waymax':
+        dynamics_model = InvertibleBicycleModel()
+        env = PlanningAgentEnvironment(
         dynamics_model=dynamics_model,
         config=dataclasses.replace(
                 _config.EnvironmentConfig(),
-                max_num_objects=32,
+                        #TODO: (tian) add this setting into config
+                        max_num_objects=16,
+                        rewards=LinearCombinationRewardConfig(
+                        rewards={'overlap': -1.0, 'offroad': -1.0, 'log_divergence': -1.0}
+                ),
         ),
         sim_agent_actors=[agents.create_expert_actor(
                 dynamics_model=StateDynamics(),
-                is_controlled_func=lambda state: not state.object_metadata.is_sdc,
+                is_controlled_func=lambda state: jnp.logical_not(state.object_metadata.is_sdc),
         )],
         sim_agent_params=[None],
-    )
-    env = WaymaxLogWrapper(env)
+        )
+        env = WaymaxLogWrapperTest(env)
+
     # if config["NORMALIZE_ENV"]:
     #     env = NormalizeVecObservation(env)
     #     env = NormalizeVecReward(env, config["GAMMA"])
@@ -131,7 +144,11 @@ def make_train(config: PPOconfig, viz_cfg):
 
     def train(rng):
         # INIT NETWORK
-        network = ActorCritic(action_dim=3, activation=config.ACTIVATION)
+        #TODO: (tian) network_factory with different action_dim and various structures
+        if config.ENV_NAME == "gokart":
+            network = ActorCritic(action_dim=3, activation=config.ACTIVATION)
+        elif config.ENV_NAME == "waymax":
+            network = ActorCritic(action_dim=2, activation=config.ACTIVATION)
         rng, _rng = jax.random.split(rng)
         init_x = jnp.zeros((config.NUM_OBS,))
         network_params = network.init(_rng, init_x)  # init_x used to determine input shape
@@ -154,7 +171,19 @@ def make_train(config: PPOconfig, viz_cfg):
         )
 
         # INIT ENV
-        env_state = create_batch_init_state(batch_size=config.NUM_ENVS)
+        if config.ENV_NAME == "gokart":
+            env_state = create_batch_init_state(batch_size=config.NUM_ENVS)
+        elif config.ENV_NAME == "waymax":
+            sce_config = dataclasses.replace(
+                _config.WOD_1_1_0_VALIDATION, 
+                path='d:/github repos for MT/waymax/dataset/validation/validation_tfexample.tfrecord-00050-of-00150', 
+                max_num_objects=16,
+                repeat=1 # set to 1 to test the length of the iterator, while set to None by default
+            )
+            data_iter = dataloader.simulator_state_generator(config=sce_config)
+            for i in range(30):
+                scenario = next(data_iter)
+            env_state = replicate_init_state_to_form_batch(scenario, config.NUM_ENVS)
 
         # rng, _rng = jax.random.split(rng)
         # reset_rng = jax.random.split(_rng, config.NUM_ENVS)
@@ -177,10 +206,14 @@ def make_train(config: PPOconfig, viz_cfg):
                 raw_action: Float[Array, "NUM_ENV 3"]
                 log_prob: Float[Array, "NUM_ENV"]
                 raw_action, log_prob = pi.sample_and_log_prob(seed=_rng)
-                action = jnp.clip(raw_action, -1.0, 1.0)  # shape [NUM_ENVS, 3]
-                # jax.debug.print("action: {}", action)
-                waymax_action = convert_to_waymaxaction(action)
-                # log_prob = pi.log_prob(raw_action) # shape [NUM_ENVS]
+                if config.ENV_NAME == 'gokart':
+                    action = jnp.clip(raw_action, jnp.array([-1.0, -6.0, -6.0]), jnp.array([1.0, 6.0, 6.0]))  # shape [NUM_ENVS, 3]
+                    # jax.debug.print("action: {}", action)
+                    waymax_action = convert_to_waymaxaction(action)
+                    # log_prob = pi.log_prob(raw_action) # shape [NUM_ENVS]
+                elif config.ENV_NAME == 'waymax':
+                    action = jnp.clip(raw_action, jnp.array([-2.0, -0.3]), jnp.array([2.0, 0.3]))
+                    waymax_action = datatypes.Action(data=action, valid=jnp.ones((action.shape[0], 1), dtype=jnp.bool_))
 
                 # STEP ENV
                 rng, _rng = jax.random.split(rng)
@@ -188,9 +221,14 @@ def make_train(config: PPOconfig, viz_cfg):
                 # obsv, env_state, reward, done, info = env.step(
                 #     env_state, waymax_action.action
                 # )
-                obsv, env_state, reward, done, info = jax.vmap(env.step, in_axes=(0, 0))(
-                        env_state, waymax_action.action
-                )  # obsv [NUM_ENVS, NUM_OBS], reward [NUM_ENVS], done [NUM_ENVS]
+                if config.ENV_NAME == 'gokart':
+                        obsv, env_state, reward, done, info = jax.vmap(env.step, in_axes=(0, 0))(
+                                env_state, waymax_action.action
+                        )  # obsv [NUM_ENVS, NUM_OBS], reward [NUM_ENVS], done [NUM_ENVS]
+                elif config.ENV_NAME == 'waymax':
+                        obsv, env_state, reward, done, info = jax.vmap(env.step, in_axes=(0, 0))(
+                                env_state, waymax_action
+                        )  # obsv [NUM_ENVS, NUM_OBS], reward [NUM_ENVS], done [NUM_ENVS]
                 # transition:
                 transition = Transition(
                         done, action, value, reward, log_prob, last_obs, info
@@ -353,11 +391,11 @@ def make_train(config: PPOconfig, viz_cfg):
             metric["loss/gae"] = gae.mean()
             metric["loss/value_debug"] = value_debug.mean()
             metric["loss/targets_debug"] = targets_debug.mean()
-            metric["debug/diff_dist_proj"] = jnp.min(obs_debug[..., -2])
-            metric["debug/proj_distances"] = jnp.min(obs_debug[..., -1])
-            metric["debug/pos_yaw"] = pos_yaw
-            metric["matrix/obs"] = obs_debug
-            metric["matrix/action"] = action_debug
+        #     metric["debug/diff_dist_proj"] = jnp.min(obs_debug[..., -2])
+        #     metric["debug/proj_distances"] = jnp.min(obs_debug[..., -1])
+        #     metric["debug/pos_yaw"] = pos_yaw
+        #     metric["matrix/obs"] = obs_debug
+        #     metric["matrix/action"] = action_debug
             rng = update_state[-1]
             if config.DEBUG:
 
@@ -390,9 +428,9 @@ def make_train(config: PPOconfig, viz_cfg):
                         "loss/gae"             : info["loss/gae"],
                         "loss/value_debug"     : info["loss/value_debug"],
                         "loss/targets_debug"   : info["loss/targets_debug"],
-                        "debug/diff_dist_proj" : info["debug/diff_dist_proj"],
-                        "debug/proj_distances" : info["debug/proj_distances"],
-                        "debug/pos_yaw"        : info["debug/pos_yaw"]
+                        # "debug/diff_dist_proj" : info["debug/diff_dist_proj"],
+                        # "debug/proj_distances" : info["debug/proj_distances"],
+                        # "debug/pos_yaw"        : info["debug/pos_yaw"]
                     }
                 #     data_matrix = {
                 #         "matrix/obs": info["matrix/obs"],
@@ -440,28 +478,57 @@ def make_train(config: PPOconfig, viz_cfg):
 
 
 def evaluate_policy(params, num_eval_steps, viz_cfg):
-    network = ActorCritic(action_dim=3, activation="tanh")
+    network = ActorCritic(action_dim=2, activation="tanh")
 
     # Re-initialize the environment
-    dynamics_model = TricycleModel(
-            gk_geometry=GoKartGeometry(),
-            model_params=TricycleParams(),
-            paj_params=PajieckaParams(),
-            dt=0.1
+#     dynamics_model = TricycleModel(
+#             gk_geometry=GoKartGeometry(),
+#             model_params=TricycleParams(),
+#             paj_params=PajieckaParams(),
+#             dt=0.1
+#     )
+#     eval_env = GokartRacingEnvironment(
+#             dynamics_model=dynamics_model,
+#             config=dataclasses.replace(
+#                     _config.EnvironmentConfig(),
+#                     max_num_objects=1,
+#                     init_steps=1
+#             ),
+#     )
+#     eval_env = WaymaxLogWrapper(eval_env)
+#     eval_state = create_init_state()
+#     imgs = []
+
+    dynamics_model = InvertibleBicycleModel()
+    env = PlanningAgentEnvironment(
+        dynamics_model=dynamics_model,
+        config=dataclasses.replace(
+                _config.EnvironmentConfig(),
+                        #TODO: (tian) add this setting into config
+                        max_num_objects=16,
+                        rewards=LinearCombinationRewardConfig(
+                        rewards={'overlap': -1.0, 'offroad': -1.0, 'log_divergence': -1.0}
+                ),
+        ),
+        sim_agent_actors=[agents.create_expert_actor(
+                dynamics_model=StateDynamics(),
+                is_controlled_func=lambda state: jnp.logical_not(state.object_metadata.is_sdc),
+        )],
+        sim_agent_params=[None],
     )
-    eval_env = GokartRacingEnvironment(
-            dynamics_model=dynamics_model,
-            config=dataclasses.replace(
-                    _config.EnvironmentConfig(),
-                    max_num_objects=1,
-                    init_steps=1
-            ),
+    eval_env = WaymaxLogWrapperTest(env)
+    sce_config = dataclasses.replace(
+        _config.WOD_1_1_0_VALIDATION, 
+        path='d:/github repos for MT/waymax/dataset/validation/validation_tfexample.tfrecord-00050-of-00150', 
+        max_num_objects=16,
+        repeat=1 # set to 1 to test the length of the iterator, while set to None by default
     )
-    eval_env = WaymaxLogWrapper(eval_env)
-    eval_state = create_init_state()
+    data_iter = dataloader.simulator_state_generator(config=sce_config)
+    for i in range(30):
+        scenario = next(data_iter)
     imgs = []
 
-    obs, eval_state = eval_env.reset(eval_state)
+    obs, eval_state = eval_env.reset(scenario)
 
     total_reward = 0.0
     reward_list = [0]
@@ -472,8 +539,10 @@ def evaluate_policy(params, num_eval_steps, viz_cfg):
                 obs,
         )
         action = pi.mean()
+        # TODO: (tian) if clip is needed
         waymax_action = datatypes.Action(data=action, valid=jnp.array([True]))
-        imgs.append(visualization.plot_simulator_state(eval_state.env_state, use_log_traj=False, viz_config=viz_cfg))
+        # imgs.append(visualization.plot_simulator_state(eval_state.env_state, use_log_traj=False, viz_config=viz_cfg))
+        imgs.append(visualization.plot_simulator_state(eval_state.env_state, use_log_traj=False))
         obs, eval_state, reward, done, info = eval_env.step(eval_state, waymax_action)
         action_list.append(action)
         reward_list.append(reward.item())

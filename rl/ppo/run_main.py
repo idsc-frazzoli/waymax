@@ -10,7 +10,7 @@ if __name__ == "__main__":
 
     config = PPOconfig()
     viz_cfg = VizConfig()
-    wandb.init(project="GokartRL-PPO", config=dataclasses.asdict(config))
+    wandb.init(project="GokartRL-PPO", config=dataclasses.asdict(config), mode='online')
 
     rng = jax.random.PRNGKey(config.SEED)
     # train_jit = jax.jit(make_train(config, viz_cfg))

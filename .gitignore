@@ -12,3 +12,5 @@ wandb/
 logs/
 __pycache__
 *.egg-info
+rl/ppo/gokartlogs
+rl/ppo/waymaxlogs
