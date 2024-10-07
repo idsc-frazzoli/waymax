@@ -452,7 +452,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         movement_vector = sdc_xy_curr - sdc_xy_last
         movement_vector /= jnp.linalg.norm(movement_vector) # normalize the movement vector
         progress = jnp.where(
-          jnp.dot(movement_vector, dir_ref) > 0.7, # around 45 degree
+          jnp.dot(movement_vector, dir_ref) > 0.7, # ~= cos45 around 45 degree
           progress,
           0) # no reward if the self-driving car is moving in the wrong direction (TODO:signed progression reward?)
         path_length = state.sdc_paths.arc_length[..., 0, -1]
@@ -565,7 +565,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
 @jaxtyped(typechecker=typechecker)
 def calculate_distances_to_boundary(
         car_position: Float[Array, "2"],
-        car_yaw: Float[Array, "1"],
+        car_yaw: Float[Array, ""],
         boundary_points: Float[Array, "N 2"],
         num_rays: int = 8,
         max_distance: float = 0.1):
@@ -582,8 +582,8 @@ def calculate_distances_to_boundary(
     distances: distance to boundary in different directions    shape (num_rays,)
     hit_points: points of intersections of rays and boundary    shape (num_rays, 2)
     """
-    jax.debug.print("car_position: {}", car_position)
-    jax.debug.print("car_yaw: {}", car_yaw)
+#     jax.debug.print("car_position: {}", car_position)
+#     jax.debug.print("car_yaw: {}", car_yaw)
 
     # checked_fn = checkify.checkify(check_greater)
     # jax.debug.breakpoint()    
@@ -603,8 +603,8 @@ def calculate_distances_to_boundary(
     # tested: min(abs(boundary2car_dist_repeated) - abs(projections)) ~= -9.536e-07 numerical error???
     debug_values1 = jnp.min(abs(boundary2car_dist_repeated) - abs(projections))
     debug_values2 = jnp.min(boundary2rays)
-    jax.debug.print("debug_values1: {}", debug_values1)
-    jax.debug.print("debug_values2: {}", debug_values2)
+#     jax.debug.print("debug_values1: {}", debug_values1)
+#     jax.debug.print("debug_values2: {}", debug_values2)
 
     perpendicular_distances = jnp.sqrt(jnp.maximum(boundary2rays, 0))
     # TODO log the value!!! (N, num_rays) CAR OUTSIDE THE TRACK
@@ -616,7 +616,7 @@ def calculate_distances_to_boundary(
 #     jax.debug.breakpoint() 
     hit_points: Float[Array, "nRays 2"] = car_position + ray_directions.T * distances[:, None]  # (num_rays, 2)
 
-    jax.debug.print("distances: {}", distances)
+#     jax.debug.print("distances: {}", distances)
     return distances, hit_points, jnp.array([debug_values1, debug_values2])
 
 

@@ -17,7 +17,7 @@ def get_environment(config: PPOconfig) -> PlanningAgentEnvironment:
         #     env = NormalizeVecObservation(env)
         #     env = NormalizeVecReward(env, config.GAMMA)
         dynamics_model = TricycleModel(gk_geometry=GoKartGeometry(), model_params=TricycleParams(),
-                                       paj_params=PajieckaParams(), dt=0.1)
+                                       paj_params=PajieckaParams(), dt=0.1, normalize_actions=True,)
 
         env = GokartRacingEnvironment(
                 dynamics_model=dynamics_model,

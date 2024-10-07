@@ -13,9 +13,9 @@ class PPOconfig:
     "number of parallel environments"
     NUM_OBS: int = 11
     "dimension of observations"
-    NUM_STEPS: int = 5 #5
+    NUM_STEPS: int = 5 #5 # TODO for GAE?? increase ??
     "Num steps * num envs = steps per update (i.e. length of trajectory)"
-    TOTAL_TIMESTEPS: int = 6e5  # 5e7
+    TOTAL_TIMESTEPS: int = 2e5  # 5e7
     "total env steps = num envs * num steps * num updates"
     UPDATE_EPOCHS: int = 5  # 5
     "number of epochs per update"
