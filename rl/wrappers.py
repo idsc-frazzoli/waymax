@@ -65,101 +65,101 @@ class WaymaxLogWrapper(JaxWrapper):
           
         return obs, state, reward, done, info
 
-class WaymaxLogWrapperTest(JaxWrapper):
-    def __init__(self, env: GokartRacingEnvironment | PlanningAgentEnvironment):
-        super().__init__(env)
+# class WaymaxLogWrapperTest(JaxWrapper):
+#     def __init__(self, env: GokartRacingEnvironment | PlanningAgentEnvironment):
+#         super().__init__(env)
 
-    @partial(jax.jit, static_argnums=(0,))
-    def reset(self, env_state: PlanningGoKartSimState | datatypes.SimulatorState, rng: jax.Array | None = None):
-        env_state = self._env.reset(env_state, rng)
+#     @partial(jax.jit, static_argnums=(0,))
+#     def reset(self, env_state: PlanningGoKartSimState | datatypes.SimulatorState, rng: jax.Array | None = None):
+#         env_state = self._env.reset(env_state, rng)
         
-        #TODO: (tian) to make this part a separate function
-        transformed_obs = sdc_observation_from_state(env_state)
-        other_objects_xy = jnp.squeeze(transformed_obs.trajectory.xy).reshape(-1)
-        flattened_mask = transformed_obs.is_ego.reshape(-1)
-        indices = jnp.where(flattened_mask>0, jnp.arange(len(flattened_mask)), -1)
-        indices = jnp.sort(indices)
-        index = indices[-1]
-        rg_xy = jnp.squeeze(transformed_obs.roadgraph_static_points.xy).reshape(-1)
-        sdc_vel_xy = jnp.squeeze(transformed_obs.trajectory.vel_xy)[index,:].reshape(-1)
-        #TODO: (tian) to delete the zeros in other_objects_xy
-        obs = jnp.concatenate(
-                [other_objects_xy, rg_xy, sdc_vel_xy,],
-                axis=-1)
+#         #TODO: (tian) to make this part a separate function
+#         transformed_obs = sdc_observation_from_state(env_state)
+#         other_objects_xy = jnp.squeeze(transformed_obs.trajectory.xy).reshape(-1)
+#         flattened_mask = transformed_obs.is_ego.reshape(-1)
+#         indices = jnp.where(flattened_mask>0, jnp.arange(len(flattened_mask)), -1)
+#         indices = jnp.sort(indices)
+#         index = indices[-1]
+#         rg_xy = jnp.squeeze(transformed_obs.roadgraph_static_points.xy).reshape(-1)
+#         sdc_vel_xy = jnp.squeeze(transformed_obs.trajectory.vel_xy)[index,:].reshape(-1)
+#         #TODO: (tian) to delete the zeros in other_objects_xy
+#         obs = jnp.concatenate(
+#                 [other_objects_xy, rg_xy, sdc_vel_xy,],
+#                 axis=-1)
 
-        state = LogEnvState(env_state, 0.0, 0, 0.0, 0)
-        return obs, state
+#         state = LogEnvState(env_state, 0.0, 0, 0.0, 0)
+#         return obs, state
     
-    @partial(jax.jit, static_argnums=(0,))
-    def reset_simple(self, env_state: PlanningGoKartSimState | datatypes.SimulatorState, rng: jax.Array | None = None):
-        env_state = self._env.reset(env_state, rng)
+#     @partial(jax.jit, static_argnums=(0,))
+#     def reset_simple(self, env_state: PlanningGoKartSimState | datatypes.SimulatorState, rng: jax.Array | None = None):
+#         env_state = self._env.reset(env_state, rng)
         
-        #TODO: (tian) to make this part a separate function
-        transformed_obs = sdc_observation_from_state(env_state)
-        other_objects_xy = jnp.squeeze(transformed_obs.trajectory.xy).reshape(-1)
-        flattened_mask = transformed_obs.is_ego.reshape(-1)
-        indices = jnp.where(flattened_mask>0, jnp.arange(len(flattened_mask)), -1)
-        indices = jnp.sort(indices)
-        index = indices[-1]
-        rg_xy = jnp.squeeze(transformed_obs.roadgraph_static_points.xy).reshape(-1)
-        sdc_vel_xy = jnp.squeeze(transformed_obs.trajectory.vel_xy)[index,:].reshape(-1)
-        #TODO: (tian) to delete the zeros in other_objects_xy
-        obs = jnp.concatenate(
-                [other_objects_xy, rg_xy, sdc_vel_xy,],
-                axis=-1)
+#         #TODO: (tian) to make this part a separate function
+#         transformed_obs = sdc_observation_from_state(env_state)
+#         other_objects_xy = jnp.squeeze(transformed_obs.trajectory.xy).reshape(-1)
+#         flattened_mask = transformed_obs.is_ego.reshape(-1)
+#         indices = jnp.where(flattened_mask>0, jnp.arange(len(flattened_mask)), -1)
+#         indices = jnp.sort(indices)
+#         index = indices[-1]
+#         rg_xy = jnp.squeeze(transformed_obs.roadgraph_static_points.xy).reshape(-1)
+#         sdc_vel_xy = jnp.squeeze(transformed_obs.trajectory.vel_xy)[index,:].reshape(-1)
+#         #TODO: (tian) to delete the zeros in other_objects_xy
+#         obs = jnp.concatenate(
+#                 [other_objects_xy, rg_xy, sdc_vel_xy,],
+#                 axis=-1)
 
-        return obs, env_state
+#         return obs, env_state
 
-    @partial(jax.jit, static_argnums=(0,))
-    def step(self, state: LogEnvState, action: datatypes.Action):
-        # Take a step in the environment
-        last_env_state = copy.deepcopy(state.env_state)
-        new_env_state = self._env.step(last_env_state, action)
-        reward = self._env.reward(last_env_state, action)
+#     @partial(jax.jit, static_argnums=(0,))
+#     def step(self, state: LogEnvState, action: datatypes.Action):
+#         # Take a step in the environment
+#         last_env_state = copy.deepcopy(state.env_state)
+#         new_env_state = self._env.step(last_env_state, action)
+#         reward = self._env.reward(last_env_state, action)
 
-        transformed_obs = sdc_observation_from_state(new_env_state)
-        other_objects_xy = jnp.squeeze(transformed_obs.trajectory.xy).reshape(-1)
-        flattened_mask = transformed_obs.is_ego.reshape(-1)
-        indices = jnp.where(flattened_mask>0, jnp.arange(len(flattened_mask)), -1)
-        indices = jnp.sort(indices)
-        index = indices[-1]
-        rg_xy = jnp.squeeze(transformed_obs.roadgraph_static_points.xy).reshape(-1)
-        sdc_vel_xy = jnp.squeeze(transformed_obs.trajectory.vel_xy)[index,:].reshape(-1)
-        obs = jnp.concatenate(
-                [other_objects_xy, rg_xy, sdc_vel_xy,],
-                axis=-1)
+#         transformed_obs = sdc_observation_from_state(new_env_state)
+#         other_objects_xy = jnp.squeeze(transformed_obs.trajectory.xy).reshape(-1)
+#         flattened_mask = transformed_obs.is_ego.reshape(-1)
+#         indices = jnp.where(flattened_mask>0, jnp.arange(len(flattened_mask)), -1)
+#         indices = jnp.sort(indices)
+#         index = indices[-1]
+#         rg_xy = jnp.squeeze(transformed_obs.roadgraph_static_points.xy).reshape(-1)
+#         sdc_vel_xy = jnp.squeeze(transformed_obs.trajectory.vel_xy)[index,:].reshape(-1)
+#         obs = jnp.concatenate(
+#                 [other_objects_xy, rg_xy, sdc_vel_xy,],
+#                 axis=-1)
         
-        done = new_env_state.is_done
-        # if done:
-        #     obs, new_env_state = self.reset(new_env_state)
-        obs, new_env_state = jax.lax.cond(
-            done,
-            lambda _: self.reset_simple(new_env_state),
-            lambda _: (obs, new_env_state),
-            operand=None
-        )
-        info ={}
+#         done = new_env_state.is_done
+#         # if done:
+#         #     obs, new_env_state = self.reset(new_env_state)
+#         obs, new_env_state = jax.lax.cond(
+#             done,
+#             lambda _: self.reset_simple(new_env_state),
+#             lambda _: (obs, new_env_state),
+#             operand=None
+#         )
+#         info ={}
 
-        # obs, env_state, reward, done, info = self._env.step(state.env_state, action)
-        obs = jax.lax.stop_gradient(obs)
-        env_state = jax.lax.stop_gradient(new_env_state)
+#         # obs, env_state, reward, done, info = self._env.step(state.env_state, action)
+#         obs = jax.lax.stop_gradient(obs)
+#         env_state = jax.lax.stop_gradient(new_env_state)
 
-        new_episode_return = state.episode_returns + reward
-        new_episode_length = state.episode_lengths + 1
-        state = LogEnvState(
-            env_state=env_state,
-            episode_returns=new_episode_return * (1 - done),
-            episode_lengths=new_episode_length * (1 - done),
-            returned_episode_returns=state.returned_episode_returns * (1 - done)
-            + new_episode_return * done,
-            returned_episode_lengths=state.returned_episode_lengths * (1 - done)
-            + new_episode_length * done,
-        )
-        info["returned_episode_returns"] = state.returned_episode_returns
-        info["returned_episode_lengths"] = state.returned_episode_lengths
-        info["returned_episode"] =  done
+#         new_episode_return = state.episode_returns + reward
+#         new_episode_length = state.episode_lengths + 1
+#         state = LogEnvState(
+#             env_state=env_state,
+#             episode_returns=new_episode_return * (1 - done),
+#             episode_lengths=new_episode_length * (1 - done),
+#             returned_episode_returns=state.returned_episode_returns * (1 - done)
+#             + new_episode_return * done,
+#             returned_episode_lengths=state.returned_episode_lengths * (1 - done)
+#             + new_episode_length * done,
+#         )
+#         info["returned_episode_returns"] = state.returned_episode_returns
+#         info["returned_episode_lengths"] = state.returned_episode_lengths
+#         info["returned_episode"] =  done
           
-        return obs, state, reward, done, info
+#         return obs, state, reward, done, info
     
 @struct.dataclass
 class NormalizeVecObsEnvState:

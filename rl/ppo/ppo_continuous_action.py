@@ -31,7 +31,7 @@ from waymax.utils.waymax_utils import replicate_init_state_to_form_batch
 #     NormalizeVecReward,
 #     ClipAction,
 # )
-from rl.wrappers import WaymaxLogWrapper, WaymaxLogWrapperTest, NormalizeVecObservation, NormalizeVecReward
+from rl.wrappers import WaymaxLogWrapper, NormalizeVecObservation, NormalizeVecReward
 
 import waymax
 from waymax.env import GokartRacingEnvironment
@@ -52,6 +52,8 @@ from waymax.env import PlanningAgentEnvironment
 from waymax import agents
 from waymax.config import LinearCombinationRewardConfig
 from waymax import dataloader
+from rl.ppo.env_factory import get_environment, init_environment
+from rl.ppo.network_factory import get_network
 
 # TODO:
 # 1. env.reset() returns a tuple of (observation, env_state)
@@ -98,41 +100,8 @@ def make_train(config: PPOconfig, viz_cfg):
     #     env = NormalizeVecObservation(env)
     #     env = NormalizeVecReward(env, config.GAMMA)
 
-    #TODO: (tian) env_factory with changed reward in config
-    #TODO: (tian) possibly changed observation in config also
-    #TODO: (tian) possibly need a new wrapper or a new environment
-    if config.ENV_NAME == 'gokart':
-        dynamics_model = TricycleModel(gk_geometry=GoKartGeometry(), model_params=TricycleParams(),
-                                        paj_params=PajieckaParams(), dt=0.1)
-
-        env = GokartRacingEnvironment(
-                dynamics_model=dynamics_model,
-                config=dataclasses.replace(
-                        _config.EnvironmentConfig(),
-                        max_num_objects=1,
-                        init_steps=1  # => state.timestep = 0
-                ),
-        )
-        env = WaymaxLogWrapper(env)
-    elif config.ENV_NAME == 'waymax':
-        dynamics_model = InvertibleBicycleModel()
-        env = PlanningAgentEnvironment(
-        dynamics_model=dynamics_model,
-        config=dataclasses.replace(
-                _config.EnvironmentConfig(),
-                        #TODO: (tian) add this setting into config
-                        max_num_objects=16,
-                        rewards=LinearCombinationRewardConfig(
-                        rewards={'overlap': -1.0, 'offroad': -1.0, 'log_divergence': -1.0}
-                ),
-        ),
-        sim_agent_actors=[agents.create_expert_actor(
-                dynamics_model=StateDynamics(),
-                is_controlled_func=lambda state: jnp.logical_not(state.object_metadata.is_sdc),
-        )],
-        sim_agent_params=[None],
-        )
-        env = WaymaxLogWrapperTest(env)
+    env = get_environment(config)
+    env = WaymaxLogWrapper(env)
 
     # if config["NORMALIZE_ENV"]:
     #     env = NormalizeVecObservation(env)
@@ -145,10 +114,7 @@ def make_train(config: PPOconfig, viz_cfg):
     def train(rng):
         # INIT NETWORK
         #TODO: (tian) network_factory with different action_dim and various structures
-        if config.ENV_NAME == "gokart":
-            network = ActorCritic(action_dim=3, activation=config.ACTIVATION)
-        elif config.ENV_NAME == "waymax":
-            network = ActorCritic(action_dim=2, activation=config.ACTIVATION)
+        network = get_network(config)
         rng, _rng = jax.random.split(rng)
         init_x = jnp.zeros((config.NUM_OBS,))
         network_params = network.init(_rng, init_x)  # init_x used to determine input shape
@@ -171,19 +137,7 @@ def make_train(config: PPOconfig, viz_cfg):
         )
 
         # INIT ENV
-        if config.ENV_NAME == "gokart":
-            env_state = create_batch_init_state(batch_size=config.NUM_ENVS)
-        elif config.ENV_NAME == "waymax":
-            sce_config = dataclasses.replace(
-                _config.WOD_1_1_0_VALIDATION, 
-                path='d:/github repos for MT/waymax/dataset/validation/validation_tfexample.tfrecord-00050-of-00150', 
-                max_num_objects=16,
-                repeat=1 # set to 1 to test the length of the iterator, while set to None by default
-            )
-            data_iter = dataloader.simulator_state_generator(config=sce_config)
-            for i in range(30):
-                scenario = next(data_iter)
-            env_state = replicate_init_state_to_form_batch(scenario, config.NUM_ENVS)
+        env_state = init_environment(config)
 
         # rng, _rng = jax.random.split(rng)
         # reset_rng = jax.random.split(_rng, config.NUM_ENVS)
@@ -516,7 +470,7 @@ def evaluate_policy(params, num_eval_steps, viz_cfg):
         )],
         sim_agent_params=[None],
     )
-    eval_env = WaymaxLogWrapperTest(env)
+    eval_env = WaymaxLogWrapper(env)
     sce_config = dataclasses.replace(
         _config.WOD_1_1_0_VALIDATION, 
         path='d:/github repos for MT/waymax/dataset/validation/validation_tfexample.tfrecord-00050-of-00150', 
