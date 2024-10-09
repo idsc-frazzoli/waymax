@@ -1,5 +1,6 @@
 import functools
 from functools import partial
+import re
 from typing import Any, Dict, Optional, Tuple, Union
 
 
@@ -29,8 +30,14 @@ class JaxWrapper(object):
 class LogEnvState:
     env_state: PlanningGoKartSimState | PlanningAgentSimulatorState
     episode_returns: float  # Sum of rewards in the current episode
+    episode_progression_returns: float
+    episode_orientation_returns: float  
+    episode_offroad_returns: float
     episode_lengths: int
     returned_episode_returns: float # Sum of rewards in the returned/terminated episode
+    returned_progression_returns: float
+    returned_orientation_returns: float
+    returned_offroad_returns: float
     returned_episode_lengths: int
 
 class WaymaxLogWrapper(JaxWrapper):
@@ -40,7 +47,7 @@ class WaymaxLogWrapper(JaxWrapper):
     @partial(jax.jit, static_argnums=(0,))
     def reset(self, env_state: PlanningGoKartSimState | datatypes.SimulatorState, rng: jax.Array | None = None):
         obs, env_state = self._env.reset(env_state, rng)
-        state = LogEnvState(env_state, 0.0, 0, 0.0, 0)
+        state = LogEnvState(env_state, 0.0, 0.0, 0.0, 0.0, 0, 0.0, 0.0,0.0, 0.0, 0)
         return obs, state
 
     @partial(jax.jit, static_argnums=(0,))
@@ -49,17 +56,32 @@ class WaymaxLogWrapper(JaxWrapper):
         obs, env_state, reward, done, info = self._env.step(state.env_state, action)
 
         new_episode_return = state.episode_returns + reward
+        new_episode_progression_return = state.episode_progression_returns + info["progression_reward"]
+        new_episode_orientation_return = state.episode_orientation_returns + info["orientation_reward"]
+        new_episode_offroad_return = state.episode_offroad_returns + info["offroad_reward"]
         new_episode_length = state.episode_lengths + 1
         state = LogEnvState(
             env_state=env_state,
             episode_returns=new_episode_return * (1 - done),
+            episode_progression_returns=new_episode_progression_return * (1 - done),
+            episode_orientation_returns=new_episode_orientation_return * (1 - done),
+            episode_offroad_returns=new_episode_offroad_return * (1 - done),
             episode_lengths=new_episode_length * (1 - done),
             returned_episode_returns=state.returned_episode_returns * (1 - done)
             + new_episode_return * done,
+            returned_progression_returns=state.returned_progression_returns * (1 - done)
+            + new_episode_progression_return * done,
+            returned_orientation_returns=state.returned_orientation_returns * (1 - done)
+            + new_episode_orientation_return * done,
+            returned_offroad_returns=state.returned_offroad_returns * (1 - done)
+            + new_episode_offroad_return * done,
             returned_episode_lengths=state.returned_episode_lengths * (1 - done)
             + new_episode_length * done,
         )
         info["returned_episode_returns"] = state.returned_episode_returns
+        info["returned_progression_returns"] = state.returned_progression_returns
+        info["returned_orientation_returns"] = state.returned_orientation_returns
+        info["returned_offroad_returns"] = state.returned_offroad_returns
         info["returned_episode_lengths"] = state.returned_episode_lengths
         info["returned_episode"] =  done
           

@@ -42,6 +42,12 @@ class WaymaxDrivingEnvironment(PlanningAgentEnvironment):
         last_state = copy.deepcopy(state)
         new_state = super().step(last_state, action, rng)
         reward = super().reward(last_state, action)
+        # TODO: (tian)
+        reward_dict = {
+            "progression_reward": jnp.zeros(reward.shape),
+            "orientation_reward": jnp.zeros(reward.shape),
+            "offroad_reward": jnp.zeros(reward.shape)
+        }
         obs = self.observe(new_state)
         done = new_state.is_done
         obs, new_state = jax.lax.cond(
@@ -50,6 +56,6 @@ class WaymaxDrivingEnvironment(PlanningAgentEnvironment):
             lambda _: (obs, new_state),
             operand=None
         )
-        info ={}
+        info = reward_dict
 
         return jax.lax.stop_gradient(obs), jax.lax.stop_gradient(new_state), reward, done, info

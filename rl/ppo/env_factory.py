@@ -13,15 +13,22 @@ from waymax.config import LinearCombinationRewardConfig
 from waymax import agents
 from waymax.dynamics import StateDynamics
 from waymax.datatypes import SimulatorState
-from waymax.utils.gokart_utils import create_batch_init_state
+from waymax.utils.gokart_utils import create_init_state, create_batch_init_state
 from waymax import dataloader
 from waymax.utils.waymax_utils import replicate_init_state_to_form_batch
 
 
 def get_environment(config: PPOconfig) -> PlanningAgentEnvironment:
     if config.ENV_NAME == "gokart":
+        # env, env_params = BraxGymnaxWrapper(config.ENV_NAME"]), None
+        # env = LogWrapper(env)
+        # env = ClipAction(env)
+        # env = VecEnv(env)
+        # if config.NORMALIZE_ENV"]:
+        #     env = NormalizeVecObservation(env)
+        #     env = NormalizeVecReward(env, config.GAMMA)
         dynamics_model = TricycleModel(gk_geometry=GoKartGeometry(), model_params=TricycleParams(),
-                                       paj_params=PajieckaParams(), dt=0.1)
+                                       paj_params=PajieckaParams(), dt=0.1, normalize_actions=True,)
 
         env = GokartRacingEnvironment(
                 dynamics_model=dynamics_model,
@@ -31,6 +38,9 @@ def get_environment(config: PPOconfig) -> PlanningAgentEnvironment:
                         init_steps=1  # => state.timestep = 0
                 ),
         )
+        # if config["NORMALIZE_ENV"]:
+        #     env = NormalizeVecObservation(env)
+        #     env = NormalizeVecReward(env, config["GAMMA"])
     elif config.ENV_NAME == "waymax":
         dynamics_model = InvertibleBicycleModel()
 
@@ -54,9 +64,12 @@ def get_environment(config: PPOconfig) -> PlanningAgentEnvironment:
         raise ValueError(f"Unsupported environment {config.ENV_NAME}")
     return env
 
-def init_environment(config: PPOconfig) -> SimulatorState:
+def init_environment(config: PPOconfig, mode: str = 'train') -> SimulatorState:
     if config.ENV_NAME == "gokart":
-        env_state = create_batch_init_state(batch_size=config.NUM_ENVS)
+        if mode == 'train':
+            env_state = create_batch_init_state(batch_size=config.NUM_ENVS, num_timesteps=config.MAX_EPISODE_LENGTH)
+        elif mode == 'eval':
+            env_state = create_init_state()
     elif config.ENV_NAME == "waymax":
         sce_config = dataclasses.replace(
                 _config.WOD_1_1_0_VALIDATION, 
@@ -67,7 +80,10 @@ def init_environment(config: PPOconfig) -> SimulatorState:
         data_iter = dataloader.simulator_state_generator(config=sce_config)
         for i in range(30):
             scenario = next(data_iter)
-        env_state = replicate_init_state_to_form_batch(scenario, config.NUM_ENVS)
+        if mode == 'train':
+            env_state = replicate_init_state_to_form_batch(scenario, config.NUM_ENVS)
+        elif mode == 'eval':
+            env_state = scenario
     else:
         raise ValueError(f"Unsupported environment {config.ENV_NAME}")
     return env_state

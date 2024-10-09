@@ -34,8 +34,9 @@ setup(
             'numpy>=1.20',
             'jax>=0.4.6',
             'jaxtyping',
-            'tensorflow>=2.11.0',
             'chex>=0.1.6',
+            'distrax>=0.1.5',
+            'tf-keras', # needed for distrax
             'dm_env>=1.6',
             'flax>=0.6.7',
             'matplotlib>=3.7.1',
