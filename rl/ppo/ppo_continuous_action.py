@@ -1,4 +1,5 @@
 import dataclasses
+from operator import ge
 import os
 from datetime import datetime
 
@@ -25,12 +26,10 @@ from rl.ppo.structures import ActorCritic, Transition
 #     ClipAction,
 # )
 from rl.wrappers import WaymaxLogWrapper
+from rl.ppo.network_factory import get_network
+from rl.ppo.env_factory import get_environment, init_environment
 from waymax import config as _config, datatypes, visualization
 from waymax.agents import actor_core
-from waymax.dynamics.tricycle_model import TricycleModel
-from waymax.env import GokartRacingEnvironment
-from waymax.utils.gokart_config import GoKartGeometry, TricycleParams, PajieckaParams
-from waymax.utils.gokart_utils import create_init_state, create_batch_init_state
 
 # TODO:
 # 1. env.reset() returns a tuple of (observation, env_state)
@@ -96,7 +95,7 @@ def make_train(config: PPOconfig, viz_cfg):
         )
 
         # INIT ENV
-        env_state = create_batch_init_state(batch_size=config.NUM_ENVS, num_timesteps=config.MAX_EPISODE_LENGTH)
+        env_state = init_environment(config)
 
         rng, _rng = jax.random.split(rng)
         reset_rng = jax.random.split(_rng, config.NUM_ENVS)
@@ -130,9 +129,14 @@ def make_train(config: PPOconfig, viz_cfg):
                 # obsv, env_state, reward, done, info = env.step(
                 #     env_state, waymax_action.action
                 # )
-                obsv, env_state, reward, done, info = jax.vmap(env.step, in_axes=(0, 0, 0))(
-                        env_state, waymax_action.action, rng_step
-                )  # obsv [NUM_ENVS, NUM_OBS], reward [NUM_ENVS], done [NUM_ENVS]
+                if config.ENV_NAME == 'gokart':
+                    obsv, env_state, reward, done, info = jax.vmap(env.step, in_axes=(0, 0, 0))(
+                            env_state, waymax_action.action, rng_step
+                    )  # obsv [NUM_ENVS, NUM_OBS], reward [NUM_ENVS], done [NUM_ENVS]
+                elif config.ENV_NAME == 'waymax':
+                    obsv, env_state, reward, done, info = jax.vmap(env.step, in_axes=(0, 0))(
+                            env_state, waymax_action
+                    )  # obsv [NUM_ENVS, NUM_OBS], reward [NUM_ENVS], done [NUM_ENVS]
                 # transition:
                 transition = Transition(
                         done, action, value, reward, log_prob, last_obs, info
@@ -297,12 +301,12 @@ def make_train(config: PPOconfig, viz_cfg):
             metric["loss/gae"] = gae.mean()
             metric["loss/value_debug"] = value_debug.mean()
             metric["loss/targets_debug"] = targets_debug.mean()
-            metric["debug/diff_dist_proj"] = jnp.min(obs_debug[..., -2])
-            metric["debug/proj_distances"] = jnp.min(obs_debug[..., -1])
-            metric["debug/pos_yaw"] = pos_yaw
-            metric["debug/max_dist_edge"] = jnp.max(obs_debug[...,3:])
-            metric["matrix/obs"] = obs_debug
-            metric["matrix/action"] = action_debug
+            # metric["debug/diff_dist_proj"] = jnp.min(obs_debug[..., -2])
+            # metric["debug/proj_distances"] = jnp.min(obs_debug[..., -1])
+            # metric["debug/pos_yaw"] = pos_yaw
+            # metric["debug/max_dist_edge"] = jnp.max(obs_debug[...,3:])
+            # metric["matrix/obs"] = obs_debug
+            # metric["matrix/action"] = action_debug
             rng = update_state[-1]
             metric["random_key"] = rng
             if config.DEBUG:
@@ -339,10 +343,10 @@ def make_train(config: PPOconfig, viz_cfg):
                         "loss/gae"             : info["loss/gae"],
                         "loss/value_debug"     : info["loss/value_debug"],
                         "loss/targets_debug"   : info["loss/targets_debug"],
-                        "debug/diff_dist_proj" : info["debug/diff_dist_proj"],
-                        "debug/proj_distances" : info["debug/proj_distances"],
-                        "debug/pos_yaw"        : info["debug/pos_yaw"],
-                        "debug/max_dist_edge"  : info["debug/max_dist_edge"],
+                        # "debug/diff_dist_proj" : info["debug/diff_dist_proj"],
+                        # "debug/proj_distances" : info["debug/proj_distances"],
+                        # "debug/pos_yaw"        : info["debug/pos_yaw"],
+                        # "debug/max_dist_edge"  : info["debug/max_dist_edge"],
                     }
                 #     data_matrix = {
                 #         "matrix/obs": info["matrix/obs"],
@@ -357,7 +361,7 @@ def make_train(config: PPOconfig, viz_cfg):
                         rng = info["random_key"]
                         rng, eval_rng = jax.random.split(rng)
                         # params = jax.device_get(train_state.params)
-                        imgs, _, eval_plot = evaluate_policy(num_updates, params, config.MAX_EPISODE_LENGTH, viz_cfg)
+                        imgs, _, eval_plot = evaluate_policy(num_updates, params, config, viz_cfg)
                         imgs_np = np.stack(imgs, axis=0)
                         wandb.log({
                             f"Iteration {num_updates}": wandb.Video(
@@ -393,27 +397,14 @@ def make_train(config: PPOconfig, viz_cfg):
     return train
 
 
-def evaluate_policy(num_updates, params, num_eval_steps, viz_cfg, rng: jax.Array | None = None):
-    network = ActorCritic(action_dim=3, activation="tanh")
+def evaluate_policy(num_updates, params, config, viz_cfg, rng: jax.Array | None = None):
+    network = get_network(config)
 
     # Re-initialize the environment
-    dynamics_model = TricycleModel(
-            gk_geometry=GoKartGeometry(),
-            model_params=TricycleParams(),
-            paj_params=PajieckaParams(),
-            dt=0.1,
-            normalize_actions=True,
-    )
-    eval_env = GokartRacingEnvironment(
-            dynamics_model=dynamics_model,
-            config=dataclasses.replace(
-                    _config.EnvironmentConfig(),
-                    max_num_objects=1,
-                    init_steps=1
-            ),
-    )
+    eval_env = get_environment(config)
     eval_env = WaymaxLogWrapper(eval_env)
-    eval_state = create_init_state(num_timesteps = num_eval_steps)
+    eval_state = init_environment(config=config, mode='eval')
+
     imgs = []
 
     obs, eval_state = eval_env.reset(eval_state)
@@ -430,7 +421,7 @@ def evaluate_policy(num_updates, params, num_eval_steps, viz_cfg, rng: jax.Array
     acc_l_list = []
     acc_r_list = []
     eval_steps = []
-    for i in range(num_eval_steps):
+    for i in range(config.MAX_EPISODE_LENGTH):
         pi, _ = network.apply(
                 params,
                 obs,
@@ -443,55 +434,65 @@ def evaluate_policy(num_updates, params, num_eval_steps, viz_cfg, rng: jax.Array
 
         # collect metrics
         # Collect metrics
-        vx_list.append(obs[0].item())
-        vy_list.append(obs[1].item())
-        steering_list.append(action[0].item())
-        acc_l_list.append(action[1].item())
-        acc_r_list.append(action[2].item())
-        eval_steps.append(i)
-        current_velocity = jnp.linalg.norm(obs[:2])
-        velocity_list.append(current_velocity.item())
-        # action_list.append(action)
-        reward_list.append(reward.item())
-        total_reward += reward
-        progression_reward += info["progression_reward"]
-        orientation_reward += info["orientation_reward"]
-        offboard_reward += info["offroad_reward"]
-        # wandb.log({ #"eval_step": i,
-        #             f"eval/iter{num_updates}_steps": i,
-        #             f"eval/iter{num_updates}_vx": obs[0].item(), 
-        #             f"eval/iter{num_updates}_vy": obs[1].item(),
-        #         #    f"eval/iter{num_updates}_velocity": velicity,
-        #             f"eval/iter{num_updates}_steering": action[0].item(),
-        #             f"eval/iter{num_updates}_acc_l": action[1].item(),
-        #             f"eval/iter{num_updates}_acc_r": action[2].item()},commit = False)
+        if config.ENV_NAME == "gokart":
+            vx_list.append(obs[0].item())
+            vy_list.append(obs[1].item())
+            steering_list.append(action[0].item())
+            acc_l_list.append(action[1].item())
+            acc_r_list.append(action[2].item())
+            eval_steps.append(i)
+            current_velocity = jnp.linalg.norm(obs[:2])
+            velocity_list.append(current_velocity.item())
+            # action_list.append(action)
+            reward_list.append(reward.item())
+            total_reward += reward
+            progression_reward += info["progression_reward"]
+            orientation_reward += info["orientation_reward"]
+            offboard_reward += info["offroad_reward"]
+            # wandb.log({ #"eval_step": i,
+            #             f"eval/iter{num_updates}_steps": i,
+            #             f"eval/iter{num_updates}_vx": obs[0].item(), 
+            #             f"eval/iter{num_updates}_vy": obs[1].item(),
+            #         #    f"eval/iter{num_updates}_velocity": velicity,
+            #             f"eval/iter{num_updates}_steering": action[0].item(),
+            #             f"eval/iter{num_updates}_acc_l": action[1].item(),
+            #             f"eval/iter{num_updates}_acc_r": action[2].item()},commit = False)
 
-        if done:
-            # print(f"episode reward: {total_reward}")
-            # print(f"reward list: {reward_list}")
-            # print(f"action list: {action_list}")
-            # wandb.log({ f"eval/iter{num_updates}_vx": vx_list,
-            #             f"eval/iter{num_updates}_vy": vy_list,
-            #             f"eval/iter{num_updates}_steering": steering_list,
-            #             f"eval/iter{num_updates}_acc_l": acc_l_list,
-            #             f"eval/iter{num_updates}_acc_r": acc_r_list,
-            #             f"eval/iter{num_updates}_steps": eval_steps}, commit = False)
-            eval_plot = plot_eval_metrics(eval_steps, vx_list, vy_list, steering_list, acc_l_list, acc_r_list)
-            episode_length = eval_state.returned_episode_lengths
-            print("Evaluation Results after {} iterations:".format(num_updates))
-            print("-" * 40)
-            print("{:<30} {:>8}".format("Metric", "Value"))
-            print("-" * 40)
-            print("{:<30} {:>8.2f}".format("Episode Length", episode_length))
-            print("{:<30} {:>8.2f}".format("Total Reward", total_reward))
-            print("{:<30} {:>8.2f}".format("Progression Reward", progression_reward))
-            print("{:<30} {:>8.2f}".format("Orientation Reward", orientation_reward))
-            print("{:<30} {:>8.2f}".format("Offboard Reward", offboard_reward))
-            print("{:<30} {:>8.2f}".format("Mean Velocity", jnp.array(velocity_list).mean()))
-            print("{:<30} {:>8.2f}".format("Max Velocity", jnp.array(velocity_list).max()))
-            print("-" * 40)
+            if done:
+                # print(f"episode reward: {total_reward}")
+                # print(f"reward list: {reward_list}")
+                # print(f"action list: {action_list}")
+                # wandb.log({ f"eval/iter{num_updates}_vx": vx_list,
+                #             f"eval/iter{num_updates}_vy": vy_list,
+                #             f"eval/iter{num_updates}_steering": steering_list,
+                #             f"eval/iter{num_updates}_acc_l": acc_l_list,
+                #             f"eval/iter{num_updates}_acc_r": acc_r_list,
+                #             f"eval/iter{num_updates}_steps": eval_steps}, commit = False)
+                eval_plot = plot_eval_metrics(eval_steps, vx_list, vy_list, steering_list, acc_l_list, acc_r_list)
+                episode_length = eval_state.returned_episode_lengths
+                print("Evaluation Results after {} iterations:".format(num_updates))
+                print("-" * 40)
+                print("{:<30} {:>8}".format("Metric", "Value"))
+                print("-" * 40)
+                print("{:<30} {:>8.2f}".format("Episode Length", episode_length))
+                print("{:<30} {:>8.2f}".format("Total Reward", total_reward))
+                print("{:<30} {:>8.2f}".format("Progression Reward", progression_reward))
+                print("{:<30} {:>8.2f}".format("Orientation Reward", orientation_reward))
+                print("{:<30} {:>8.2f}".format("Offboard Reward", offboard_reward))
+                print("{:<30} {:>8.2f}".format("Mean Velocity", jnp.array(velocity_list).mean()))
+                print("{:<30} {:>8.2f}".format("Max Velocity", jnp.array(velocity_list).max()))
+                print("-" * 40)
 
-            break
+                break
+
+            elif config.ENV_NAME == 'waymax':
+                action_list = []
+                action_list.append(action)
+                reward_list.append(reward.item())
+                total_reward += reward
+
+                if done:
+                        break
 
     return imgs, total_reward, eval_plot
 

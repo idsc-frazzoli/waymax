@@ -520,7 +520,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
     
     def _compute_slip_reward(self, state: PlanningGoKartSimState) -> jnp.ndarray:
         """"
-        Computes the slip reward. The car is penalized for slipping.
+        Computes the slip reward. The car is penalized for slipping (vy).
         """
         # shape: (..., num_objects, timesteps=1, 2) -> (..., num_objects, 2)
         vel_xy = state.current_sim_trajectory.vel_xy[..., 0, :]
@@ -667,7 +667,7 @@ def check_greater(a: Array, b: Array):
 
 def get_future_track(state: PlanningGoKartSimState, car_pos, nearest_index, num_points=60):
     """
-    Get the reference path (centerline) ahead of the car (60 points ~= 6m)
+    Get the reference path (centerline) ahead of the car (60 points ~= 6m) # TODO based on velocity??
     """
     roadgraph_points = state.roadgraph_points.xy
 
