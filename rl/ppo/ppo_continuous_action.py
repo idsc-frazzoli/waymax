@@ -11,6 +11,7 @@ import wandb
 from flax.training.train_state import TrainState
 from jax import Array
 from jaxtyping import Float
+import matplotlib.pyplot as plt
 
 from rl.ppo.config import PPOconfig
 from rl.ppo.env_factory import get_environment
@@ -97,9 +98,9 @@ def make_train(config: PPOconfig, viz_cfg):
         # INIT ENV
         env_state = create_batch_init_state(batch_size=config.NUM_ENVS, num_timesteps=config.MAX_EPISODE_LENGTH)
 
-        # rng, _rng = jax.random.split(rng)
-        # reset_rng = jax.random.split(_rng, config.NUM_ENVS)
-        obsv, env_state = jax.vmap(env.reset, in_axes=(0,))(env_state)
+        rng, _rng = jax.random.split(rng)
+        reset_rng = jax.random.split(_rng, config.NUM_ENVS)
+        obsv, env_state = jax.vmap(env.reset, in_axes=(0, 0))(env_state, reset_rng)
 
         # env_state, obsv = env.reset(env_state)
 
@@ -129,8 +130,8 @@ def make_train(config: PPOconfig, viz_cfg):
                 # obsv, env_state, reward, done, info = env.step(
                 #     env_state, waymax_action.action
                 # )
-                obsv, env_state, reward, done, info = jax.vmap(env.step, in_axes=(0, 0))(
-                        env_state, waymax_action.action
+                obsv, env_state, reward, done, info = jax.vmap(env.step, in_axes=(0, 0, 0))(
+                        env_state, waymax_action.action, rng_step
                 )  # obsv [NUM_ENVS, NUM_OBS], reward [NUM_ENVS], done [NUM_ENVS]
                 # transition:
                 transition = Transition(
@@ -299,9 +300,11 @@ def make_train(config: PPOconfig, viz_cfg):
             metric["debug/diff_dist_proj"] = jnp.min(obs_debug[..., -2])
             metric["debug/proj_distances"] = jnp.min(obs_debug[..., -1])
             metric["debug/pos_yaw"] = pos_yaw
+            metric["debug/max_dist_edge"] = jnp.max(obs_debug[...,3:])
             metric["matrix/obs"] = obs_debug
             metric["matrix/action"] = action_debug
             rng = update_state[-1]
+            metric["random_key"] = rng
             if config.DEBUG:
 
                 def callback(info):
@@ -319,7 +322,7 @@ def make_train(config: PPOconfig, viz_cfg):
                     #     )
                     # info["returned_episode_returns"] # shape [NUM_STEPS, NUM_ENVS]
                     data_log = {
-                        "train_step": info["iteration"],
+                        # "train_step": info["iteration"],
                         "reward/episode_return": info["returned_episode_returns"].mean(-1).reshape(-1)[-1],
                         "reward/episode_progression_return": info["returned_progression_returns"].mean(-1).reshape(-1)[-1],
                         "reward/episode_orientation_return": info["returned_orientation_returns"].mean(-1).reshape(-1)[-1],
@@ -338,7 +341,8 @@ def make_train(config: PPOconfig, viz_cfg):
                         "loss/targets_debug"   : info["loss/targets_debug"],
                         "debug/diff_dist_proj" : info["debug/diff_dist_proj"],
                         "debug/proj_distances" : info["debug/proj_distances"],
-                        "debug/pos_yaw"        : info["debug/pos_yaw"]
+                        "debug/pos_yaw"        : info["debug/pos_yaw"],
+                        "debug/max_dist_edge"  : info["debug/max_dist_edge"],
                     }
                 #     data_matrix = {
                 #         "matrix/obs": info["matrix/obs"],
@@ -350,20 +354,23 @@ def make_train(config: PPOconfig, viz_cfg):
                     # params = jax.device_get(train_state.params)
                     if num_updates % config.EVAL_FREQ == 0:
                         params = info["train/params"]
+                        rng = info["random_key"]
+                        rng, eval_rng = jax.random.split(rng)
                         # params = jax.device_get(train_state.params)
-                        imgs, _ = evaluate_policy(num_updates, params, config.MAX_EPISODE_LENGTH, viz_cfg)
+                        imgs, _, eval_plot = evaluate_policy(num_updates, params, config.MAX_EPISODE_LENGTH, viz_cfg)
                         imgs_np = np.stack(imgs, axis=0)
                         wandb.log({
                             f"Iteration {num_updates}": wandb.Video(
                                     np.moveaxis(imgs_np, -1, 1),
                                     fps=10,
                                     format="mp4",
-                            )
+                            ),
+                            f"eval/iter{num_updates}_plot": wandb.Image(eval_plot)
                         })
 
-                    new_row = pd.DataFrame([data_log])
-                    df_log = pd.concat([df_log, new_row], ignore_index=True)
-                    df_log.to_csv(log_path, index=False)
+                #     new_row = pd.DataFrame([data_log])
+                #     df_log = pd.concat([df_log, new_row], ignore_index=True)
+                #     df_log.to_csv(log_path, index=False)
 
                 #     new_matrix = pd.DataFrame([data_matrix])
                 #     df_matrix = pd.concat([df_matrix, new_matrix], ignore_index=True)
@@ -386,7 +393,7 @@ def make_train(config: PPOconfig, viz_cfg):
     return train
 
 
-def evaluate_policy(num_updates, params, num_eval_steps, viz_cfg):
+def evaluate_policy(num_updates, params, num_eval_steps, viz_cfg, rng: jax.Array | None = None):
     network = ActorCritic(action_dim=3, activation="tanh")
 
     # Re-initialize the environment
@@ -406,7 +413,7 @@ def evaluate_policy(num_updates, params, num_eval_steps, viz_cfg):
             ),
     )
     eval_env = WaymaxLogWrapper(eval_env)
-    eval_state = create_init_state()
+    eval_state = create_init_state(num_timesteps = num_eval_steps)
     imgs = []
 
     obs, eval_state = eval_env.reset(eval_state)
@@ -450,14 +457,14 @@ def evaluate_policy(num_updates, params, num_eval_steps, viz_cfg):
         progression_reward += info["progression_reward"]
         orientation_reward += info["orientation_reward"]
         offboard_reward += info["offroad_reward"]
-        wandb.log({ #"eval_step": i,
-                    f"eval/iter{num_updates}_steps": i,
-                    f"eval/iter{num_updates}_vx": obs[0].item(), 
-                    f"eval/iter{num_updates}_vy": obs[1].item(),
-                #    f"eval/iter{num_updates}_velocity": velicity,
-                    f"eval/iter{num_updates}_steering": action[0].item(),
-                    f"eval/iter{num_updates}_acc_l": action[1].item(),
-                    f"eval/iter{num_updates}_acc_r": action[2].item()},commit = False)
+        # wandb.log({ #"eval_step": i,
+        #             f"eval/iter{num_updates}_steps": i,
+        #             f"eval/iter{num_updates}_vx": obs[0].item(), 
+        #             f"eval/iter{num_updates}_vy": obs[1].item(),
+        #         #    f"eval/iter{num_updates}_velocity": velicity,
+        #             f"eval/iter{num_updates}_steering": action[0].item(),
+        #             f"eval/iter{num_updates}_acc_l": action[1].item(),
+        #             f"eval/iter{num_updates}_acc_r": action[2].item()},commit = False)
 
         if done:
             # print(f"episode reward: {total_reward}")
@@ -469,6 +476,7 @@ def evaluate_policy(num_updates, params, num_eval_steps, viz_cfg):
             #             f"eval/iter{num_updates}_acc_l": acc_l_list,
             #             f"eval/iter{num_updates}_acc_r": acc_r_list,
             #             f"eval/iter{num_updates}_steps": eval_steps}, commit = False)
+            eval_plot = plot_eval_metrics(eval_steps, vx_list, vy_list, steering_list, acc_l_list, acc_r_list)
             episode_length = eval_state.returned_episode_lengths
             print("Evaluation Results after {} iterations:".format(num_updates))
             print("-" * 40)
@@ -485,7 +493,7 @@ def evaluate_policy(num_updates, params, num_eval_steps, viz_cfg):
 
             break
 
-    return imgs, total_reward
+    return imgs, total_reward, eval_plot
 
 
 def convert_to_waymaxaction(action: Float[Array, "b A"]) -> actor_core.WaymaxActorOutput:
@@ -497,3 +505,37 @@ def convert_to_waymaxaction(action: Float[Array, "b A"]) -> actor_core.WaymaxAct
             action=action,
             is_controlled=jnp.ones((action.shape[0], 1), dtype=jnp.bool_),
             actor_state=None)
+
+def plot_eval_metrics(eval_steps, vx_list, vy_list, steering_list, acc_l_list, acc_r_list):
+    fig, ax = plt.subplots(3, 1, figsize=(10, 12))
+
+    # Plot vx and vy
+    ax[0].plot(eval_steps, vx_list, label='vx', color='blue')
+    ax[0].plot(eval_steps, vy_list, label='vy', color='red')
+    ax[0].set_title('vx and vy over Evaluation Steps')
+    ax[0].set_xlabel('Evaluation Step')
+    ax[0].set_ylabel('Velocity')
+    ax[0].legend()
+
+    # Plot steering
+    ax[1].plot(eval_steps, steering_list, label='Steering', color='green')
+    ax[1].set_title('Steering over Evaluation Steps')
+    ax[1].set_xlabel('Evaluation Step')
+    ax[1].set_ylabel('Steering Angle')
+    ax[1].legend()
+
+    # Plot acc_l and acc_r
+    ax[2].plot(eval_steps, acc_l_list, label='acc_l', color='orange')
+    ax[2].plot(eval_steps, acc_r_list, label='acc_r', color='purple')
+    ax[2].set_title('acc_l and acc_r over Evaluation Steps')
+    ax[2].set_xlabel('Evaluation Step')
+    ax[2].set_ylabel('Acceleration')
+    ax[2].legend()
+
+    plt.tight_layout()
+
+    # Log the figure to wandb without saving to local storage
+    # wandb.log({f"eval/iter{num_updates}_metrics_plot": wandb.Image(fig)})
+
+    plt.close(fig)  # Close the figure after logging
+    return fig

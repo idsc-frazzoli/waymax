@@ -29,6 +29,7 @@ from jaxtyping import Float, jaxtyped
 from waymax import config as _config, datatypes, dynamics as _dynamics, rewards
 from waymax.agents import actor_core
 from waymax.env import typedefs as types, PlanningAgentEnvironment
+from waymax.datatypes.operations import dynamic_slice
 
 typechecker = beartype.beartype
 
@@ -111,10 +112,20 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
                 keepdims=False,
         )
 
-        dir_ref = self.get_ref_direction(state)  # (...,2)
+        dir_ref, nearest_index = self.get_ref_direction(state)  # (...,2)
         dir_ref = jnp.arctan2(dir_ref[..., 1], dir_ref[..., 0])  # (...,)
         dir_diff = sdc_yaw_curr - dir_ref  # (...,)
         dir_diff = dir_diff[..., None]  # (..., 1)
+
+        # future_track = get_future_track(state, sdc_xy_curr, nearest_index)
+
+        yaw_rate = state.current_sim_trajectory.yaw_rate[..., 0]
+
+        sdc_yaw_rate_curr = datatypes.select_by_onehot(
+                yaw_rate,
+                state.object_metadata.is_sdc,
+                keepdims=False,
+        )
 
         # is_road_edge = datatypes.is_road_edge(state.roadgraph_points.types)
         # edge_points = state.roadgraph_points.xy[is_road_edge & state.roadgraph_points.valid] # not allowed for jit, dynamic indexing !!!
@@ -145,6 +156,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         #     jax.debug.print("right edge: {}", edge_points[-5:])  
         #     jax.debug.print("sdc_xy_curr: {}", sdc_xy_curr)
             distance_to_edge, _, debug_value = calculate_distances_to_boundary(sdc_xy_curr, sdc_yaw_curr, edge_points)
+            # distance_to_edge = (distance_to_edge - 15) / 15 # normalize the distance to the track boundary
         #     jax.debug.print("distance_to_edge: {}", distance_to_edge)
         #     jax.debug.breakpoint()
         else:
@@ -154,8 +166,8 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
 
 
         obs = jnp.concatenate(
-                [sdc_vel_curr, dir_diff, distance_to_edge],
-                axis=-1)  ## add information of the track? + yaw rate
+                [sdc_vel_curr, jnp.array([sdc_yaw_rate_curr]), dir_diff,  distance_to_edge],
+                axis=-1)  ## add information of the track? + yaw rate  
         # sdc_xy_curr, jnp.array([sdc_yaw_curr]), , debug_value
         return obs
 
@@ -231,7 +243,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         obs = self.observe(state)
         return obs, state
 
-    def step(self, state: PlanningGoKartSimState, action: datatypes.Action):
+    def step(self, state: PlanningGoKartSimState, action: datatypes.Action, rng: jax.Array | None = None):
         """Advances simulation by one timestep using the dynamics model.
 
         Args:
@@ -261,7 +273,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         #     keepdims=False,
         # )
         # movement_vector = current_sdc_xy - last_sdc_xy
-        dir_ref = self.get_ref_direction(state)
+        dir_ref, _ = self.get_ref_direction(state)
         # last_metric_dict = metrics.run_metrics(last_state, self.metrics_config)
         # metric_dict = metrics.run_metrics(state, self.metrics_config)
         # progression_reward = 1000 * (metric_dict["sdc_progression"].value - last_metric_dict["sdc_progression"].value)
@@ -276,12 +288,12 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         reward, reward_dict = self.compute_reward(last_state, state, dir_ref, done)
         # reward = jnp.where(done, reward, reward+0.05) # encourage the self-driving car to stay on the track
         # reward = jnp.where(done & jnp.logical_not(state.is_done), reward - 5, reward) # penalize the self-driving car for going off-road
-        obs, state = self.post_step(state, obs, done)
+        obs, state = self.post_step(state, obs, done, rng)
         # done = False # for testing
         info = reward_dict
         return jax.lax.stop_gradient(obs), jax.lax.stop_gradient(state), reward, done, info
 
-    def post_step(self, state: PlanningGoKartSimState, obs: jnp.ndarray, done) -> PlanningGoKartSimState:
+    def post_step(self, state: PlanningGoKartSimState, obs: jnp.ndarray, done, rng: jax.Array | None = None,) -> PlanningGoKartSimState:
         """reset the environment if the self-driving car is off-road or the episode is done
 
         Args:
@@ -304,7 +316,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
 
         obs, state = jax.lax.cond(
                 done,
-                lambda _: self.reset(state),
+                lambda _: self.reset(state, rng),
                 lambda _: (obs, state),
                 operand=None
         )
@@ -493,7 +505,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         )
         yaw_vec = jnp.array([jnp.cos(sdc_yaw_curr), jnp.sin(sdc_yaw_curr)])  # (..., 2)
         orientation_reward = jnp.dot(yaw_vec, dir_ref)  # (...,)
-        orientation_reward *= jnp.dot(sdc_vel_curr, dir_ref)  # (...,)
+        orientation_reward *= jnp.sign(sdc_vel_curr[0])  # (...,)
         orientation_reward *= 0.05
         orientation_reward = jnp.clip(orientation_reward, -0.05, 0.05)
         return orientation_reward
@@ -505,6 +517,24 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         # state.is_done indicates the max. episode length is reached, not off-road
         offroad_reward = jnp.where(done & jnp.logical_not(state.is_done), - 5, 0) 
         return offroad_reward
+    
+    def _compute_slip_reward(self, state: PlanningGoKartSimState) -> jnp.ndarray:
+        """"
+        Computes the slip reward. The car is penalized for slipping.
+        """
+        # shape: (..., num_objects, timesteps=1, 2) -> (..., num_objects, 2)
+        vel_xy = state.current_sim_trajectory.vel_xy[..., 0, :]
+
+        # shape: (...,2)
+        sdc_vel_curr = datatypes.select_by_onehot(
+                vel_xy,
+                state.object_metadata.is_sdc,
+                keepdims=False,
+        )
+        slip_reward = jnp.linalg.norm(sdc_vel_curr[..., 1])
+        slip_reward *= 0.1
+        slip_reward = jnp.clip(slip_reward, 0, 0.1)
+        pass
 
     def get_ref_direction(self, state: PlanningGoKartSimState) -> jnp.ndarray:
         """Get the reference direction of the self-driving car
@@ -552,14 +582,14 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         dist = jnp.where(
                 jnp.expand_dims(sdc_valid_curr, axis=(-1, -2)), dist, jnp.inf
         )
-
+        # index of the nearest point on the reference path
         idx = jnp.argmin(dist, axis=-1, keepdims=True)  # (..., num_paths=1, 1)
 
         # use the direction of the nearest sdc_path point as referece direction
         dir_ref = jnp.take_along_axis(state.sdc_paths.dir_xy, idx[..., None], axis=-2)  # (..., num_paths=1, 1, 2)
         dir_ref = jnp.squeeze(dir_ref, axis=(-2, -3))  # (...,2)
 
-        return dir_ref
+        return dir_ref, idx.squeeze()
 
 
 @jaxtyped(typechecker=typechecker)
@@ -634,3 +664,39 @@ def get_edge_points(roadgraph_points_pos, roadgraph_points_types) -> Float[Array
 def check_greater(a: Array, b: Array):
     condition = jnp.all(a > b)
     checkify.check(condition, f"Assertion failed: is not greater than {b}")
+
+def get_future_track(state: PlanningGoKartSimState, car_pos, nearest_index, num_points=60):
+    """
+    Get the reference path (centerline) ahead of the car (60 points ~= 6m)
+    """
+    roadgraph_points = state.roadgraph_points.xy
+
+    def within_bounds():
+        # Using dynamic_slice_in_dim to slice along the first dimension (rows)
+        return jax.lax.dynamic_slice_in_dim(roadgraph_points, nearest_index, num_points, axis=0)
+
+    def out_of_bounds():
+        # Handle the wrap-around case by slicing in two parts and concatenating
+        slice_size1 = jnp.minimum(2000 - nearest_index, num_points)
+        slice_size2 = num_points - slice_size1
+
+        # slice_size1 = slice_size1.astype(jnp.int32)
+        # slice_size2 = slice_size2.astype(jnp.int32)
+        
+        part1 = jax.lax.dynamic_slice_in_dim(roadgraph_points, nearest_index, slice_size1, axis=0)
+        part2 = jax.lax.dynamic_slice_in_dim(roadgraph_points, 0, slice_size2, axis=0)
+        return jnp.concatenate([part1, part2], axis=0)
+
+    # jax.lax.cond will check (trace) the code in both branches even if it only executes one of them at runtime. 
+    # It's important to ensure that both branches have identical output types
+    cond = jnp.any(nearest_index < 2000 - num_points)
+    cond = cond.astype(jnp.bool)
+    track_points = jax.lax.cond(
+        cond,
+        within_bounds,
+        out_of_bounds
+    )
+
+    # future_track = jnp.concatenate([center_track_points, left_track_points, right_track_points], axis=-2)
+    relative_track = track_points - car_pos
+    return relative_track
