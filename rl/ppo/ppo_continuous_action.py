@@ -17,6 +17,15 @@ import matplotlib.pyplot as plt
 from rl.ppo.config import PPOconfig
 from rl.ppo.env_factory import get_environment
 from rl.ppo.structures import ActorCritic, Transition
+from rl.wrappers import WaymaxLogWrapper
+from waymax import config as _config, datatypes, visualization
+from waymax.agents import actor_core
+from waymax.dynamics.tricycle_model import TricycleModel
+from waymax.env import GokartRacingEnvironment
+from waymax.utils.gokart_config import GoKartGeometry, TricycleParams, PajieckaParams
+from waymax.utils.gokart_utils import create_init_state, create_batch_init_state
+from waymax.utils.waymax_utils import replicate_init_state_to_form_batch
+
 # from wrappers import (
 #     LogWrapper,
 #     BraxGymnaxWrapper,
@@ -53,18 +62,16 @@ def make_train(config: PPOconfig, viz_cfg):
     log_file = f"data_log_{current_time}.csv"
     log_file_matrix = f"matrix_log_{current_time}.csv"
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    log_dir = os.path.join(script_dir, "logs")
+    log_dir = os.path.join(script_dir, config.ENV_NAME + "logs")
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
 
     log_path = os.path.join(log_dir, log_file)
     log_path_matrix = os.path.join(log_dir, log_file_matrix)
 
-
-
-
     # todo move this part as well to the env factory
     env = get_environment(config)
     env = WaymaxLogWrapper(env)
-
 
     def linear_schedule(count):
         frac = (1.0 - (count // (config.NUM_MINIBATCHES * config.UPDATE_EPOCHS)) / config.NUM_UPDATES)
@@ -72,7 +79,8 @@ def make_train(config: PPOconfig, viz_cfg):
 
     def train(rng):
         # INIT NETWORK
-        network = ActorCritic(action_dim=3, activation=config.ACTIVATION)
+        #TODO: (tian) network_factory with different action_dim and various structures
+        network = get_network(config)
         rng, _rng = jax.random.split(rng)
         init_x = jnp.zeros((config.NUM_OBS,))
         network_params = network.init(_rng, init_x)  # init_x used to determine input shape
@@ -118,10 +126,14 @@ def make_train(config: PPOconfig, viz_cfg):
                 raw_action: Float[Array, "NUM_ENV 3"]
                 log_prob: Float[Array, "NUM_ENV"]
                 raw_action, log_prob = pi.sample_and_log_prob(seed=_rng)
-                action = jnp.clip(raw_action, -1.0, 1.0)  # shape [NUM_ENVS, 3]
-                # jax.debug.print("action: {}", action)
-                waymax_action = convert_to_waymaxaction(action)
-                # log_prob = pi.log_prob(raw_action) # shape [NUM_ENVS]
+                if config.ENV_NAME == 'gokart':
+                    action = jnp.clip(raw_action, -1.0, 1.0)  # shape [NUM_ENVS, 3]
+                    # jax.debug.print("action: {}", action)
+                    waymax_action = convert_to_waymaxaction(action)
+                    # log_prob = pi.log_prob(raw_action) # shape [NUM_ENVS]
+                elif config.ENV_NAME == 'waymax':
+                    action = jnp.clip(raw_action, jnp.array([-2.0, -0.3]), jnp.array([2.0, 0.3]))
+                    waymax_action = datatypes.Action(data=action, valid=jnp.ones((action.shape[0], 1), dtype=jnp.bool_))
 
                 # STEP ENV
                 rng, _rng = jax.random.split(rng)
@@ -427,8 +439,12 @@ def evaluate_policy(num_updates, params, config, viz_cfg, rng: jax.Array | None 
                 obs,
         )
         action = pi.mean()
+        # TODO: (tian) if clip is needed
         waymax_action = datatypes.Action(data=action, valid=jnp.array([True]))
-        imgs.append(visualization.plot_simulator_state(eval_state.env_state, use_log_traj=False, viz_config=viz_cfg))
+        if config.ENV_NAME == 'gokart':
+                imgs.append(visualization.plot_simulator_state(eval_state.env_state, use_log_traj=False, viz_config=viz_cfg))
+        elif config.ENV_NAME == 'waymax':
+                imgs.append(visualization.plot_simulator_state(eval_state.env_state, use_log_traj=False))
         # jax.debug.breakpoint()
         obs, eval_state, reward, done, info = eval_env.step(eval_state, waymax_action)
 

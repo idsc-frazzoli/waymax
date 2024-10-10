@@ -23,6 +23,8 @@ class PPOconfig:
     "number of minibatches = num envs * num steps / minibatch size"
     EVAL_FREQ: int = 500
     "evaluate every EVAL_FREQ updates"
+    NUM_EVAL_STEPS: int = 90
+    "number of steps to evaluate"
     GAMMA: float = 0.99
     GAE_LAMBDA: float = 0.95
     "generalized advantage estimation lambda"
@@ -35,7 +37,7 @@ class PPOconfig:
     MAX_GRAD_NORM: float = 0.5
     "max gradient norm"
     ACTIVATION: str = "tanh"
-    ENV_NAME: str = "gokart"
+    ENV_NAME: str = "waymax"
     ANNEAL_LR: bool = False
     NORMALIZE_ENV: bool = True
     DEBUG: bool = True
