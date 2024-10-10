@@ -51,9 +51,9 @@ class WaymaxLogWrapper(JaxWrapper):
         return obs, state
 
     @partial(jax.jit, static_argnums=(0,))
-    def step(self, state: LogEnvState, action: datatypes.Action):
+    def step(self, state: LogEnvState, action: datatypes.Action, rng: jax.Array | None = None):
         # Take a step in the environment
-        obs, env_state, reward, done, info = self._env.step(state.env_state, action)
+        obs, env_state, reward, done, info = self._env.step(state.env_state, action, rng)
 
         new_episode_return = state.episode_returns + reward
         new_episode_progression_return = state.episode_progression_returns + info["progression_reward"]
