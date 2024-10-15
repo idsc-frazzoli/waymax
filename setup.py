@@ -21,7 +21,7 @@ with open('README.md', encoding='utf-8') as f:
     _long_description = f.read()
 
 setup(
-        name='waymo-waymax',
+        name='waymax',
         version=__version__,
         description='Waymo simulator for autonomous driving',
         long_description=_long_description,
