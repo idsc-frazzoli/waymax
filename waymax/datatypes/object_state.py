@@ -208,6 +208,11 @@ class Trajectory:
     # Make sure those that were originally invalid are still invalid.
     return jnp.where(self.valid, vel_yaw, _INVALID_FLOAT_VALUE)
 
+  @property
+  def controllable_fields(self) -> Sequence[str]:
+    """Returns the fields that are controllable."""
+    return ['x', 'y', 'yaw', 'vel_x', 'vel_y']
+
   def __eq__(self, other: Any) -> bool:
     return operations.compare_all_leaf_nodes(self, other)
 
@@ -293,6 +298,11 @@ class Trajectory:
 @chex.dataclass
 class GoKartTrajectory(Trajectory):
   yaw_rate: jax.Array
+
+  @property
+  def controllable_fields(self) -> Sequence[str]:
+      """Returns the fields that are controllable."""
+      return ['x', 'y', 'yaw', 'vel_x', 'vel_y', 'yaw_rate']
 
   @classmethod
   def zeros(cls, shape: Sequence[int]) -> 'GoKartTrajectory':
