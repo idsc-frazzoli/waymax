@@ -22,8 +22,6 @@ import jax.numpy as jnp
 
 from waymax import datatypes
 
-CONTROLLABLE_FIELDS = ['x', 'y', 'yaw', 'vel_x', 'vel_y']
-
 
 class DynamicsModel(abc.ABC):
   """Object dynamics base class."""
@@ -203,7 +201,7 @@ def apply_trajectory_update_to_state(
   # from the current trajectory.
   # TODO: Update z using the (x, y) coordinates of the vehicle.
   replacement_dict = {}
-  for field in CONTROLLABLE_FIELDS:
+  for field in sim_trajectory.controllable_fields:
     if use_fallback:
       # Use fallback trajectory if user doesn't not provide valid action.
       new_value = jnp.where(

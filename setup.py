@@ -13,41 +13,44 @@
 # limitations under the License.
 
 """setup.py file for Waymax."""
-from setuptools import find_packages
-from setuptools import setup
-
+from setuptools import find_packages, setup
 
 __version__ = '0.1.0'
 
-
 with open('README.md', encoding='utf-8') as f:
-  _long_description = f.read()
+    _long_description = f.read()
 
 setup(
-    name='waymo-waymax',
-    version=__version__,
-    description='Waymo simulator for autonomous driving',
-    long_description=_long_description,
-    long_description_content_type='text/markdown',
-    author='Waymax team',
-    author_email='waymo-waymax@google.com',
-    python_requires='>=3.10',
-    packages=find_packages(),
-    install_requires=[
-        'numpy>=1.20',
-        'jax>=0.4.6',
-        'tensorflow>=2.11.0',
-        'chex>=0.1.6',
-        'dm_env>=1.6',
-        'flax>=0.6.7',
-        'matplotlib>=3.7.1',
-        'dm-tree>=0.1.8',
-        'immutabledict>=2.2.3',
-        'Pillow>=9.4.0',
-        'mediapy>=1.1.6',
-        'tqdm>=4.65.0',
-        'absl-py>=1.4.0',
-    ],
-    url='https://github.com/waymo-research/waymax',
-    license='Apache-2.0',
+        name='waymax',
+        version=__version__,
+        description='Waymo simulator for autonomous driving',
+        long_description=_long_description,
+        long_description_content_type='text/markdown',
+        author='Waymax team',
+        author_email='waymo-waymax@google.com',
+        python_requires='>=3.10',
+        packages=find_packages(),
+        install_requires=[
+            'numpy>=1.20',
+            'jax>=0.4.6',
+            'jaxtyping',
+            'chex>=0.1.6',
+            'distrax>=0.1.5',
+            'tf-keras', # needed for distrax
+            'dm_env>=1.6',
+            'flax>=0.6.7',
+            'matplotlib>=3.7.1',
+            'dm-tree>=0.1.8',
+            'immutabledict>=2.2.3',
+            'Pillow>=9.4.0',
+            'mediapy>=1.1.6',
+            'moviepy',
+            'imageio',
+            'tqdm>=4.65.0',
+            'absl-py>=1.4.0',
+            'pytest>=6.2.4',
+            "beartype"
+        ],
+        url='https://github.com/waymo-research/waymax',
+        license='Apache-2.0',
 )
