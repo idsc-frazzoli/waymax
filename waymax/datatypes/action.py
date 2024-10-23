@@ -112,4 +112,37 @@ class TrajectoryUpdate:
     )
     return Action(data=action, valid=self.valid)
 
+@chex.dataclass
+class GoKartTrajectoryUpdate(TrajectoryUpdate):
+  yaw_rate: jax.Array  # (..., num_objects, 1)
 
+  def validate(self) -> None:
+    """Validates shape and type."""
+    # Verifies that each element has the same dimensions.
+    chex.assert_equal_shape(
+        [self.x, self.y, self.yaw, self.vel_x, self.vel_y, self.yaw_rate, self.valid],
+    )
+    chex.assert_type(
+        [self.x, self.y, self.yaw, self.vel_x, self.vel_y, self.yaw_rate, self.valid],
+        [
+            jnp.float32,
+            jnp.float32,
+            jnp.float32,
+            jnp.float32,
+            jnp.float32,
+            jnp.float32,
+            jnp.bool_,
+        ],
+    )
+
+  def as_action(self) -> Action:
+    """Returns this trajectory update as a 5D Action for StateDynamics.
+
+    Returns:
+      An action data structure with data of shape (..., 5) containing
+      x, y, yaw, vel_x, and vel_y.
+    """
+    action = jnp.concatenate(
+        [self.x, self.y, self.yaw, self.vel_x, self.vel_y, self.yaw_rate], axis=-1
+    )
+    return Action(data=action, valid=self.valid)

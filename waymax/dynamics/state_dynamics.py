@@ -93,3 +93,38 @@ class StateDynamics(abstract_dynamics.DynamicsModel):
     )
     # Slice out timestep dimension.
     return datatypes.Action(data=stacked[..., 0, :], valid=valids)
+
+class GoKartStateDynamics(StateDynamics):
+  def __init__(self):
+    """Initializes the StateDynamics."""
+    super().__init__()
+
+  def compute_update(
+      self,
+      action: datatypes.Action,
+      trajectory: datatypes.Trajectory,
+  ) -> datatypes.TrajectoryUpdate:
+    """Computes the pose and velocity updates at timestep.
+
+    This dynamics will directly set the next x, y, yaw, vel_x, and vel_y based
+    on the action.
+
+    Args:
+      action: Actions to take. Has shape (..., num_objects).
+      trajectory: Trajectory to be updated. Has shape of (..., num_objects,
+        num_timesteps=1).
+
+    Returns:
+      The trajectory update for timestep.
+    """
+    del trajectory  # Not used.
+    return datatypes.GoKartTrajectoryUpdate(
+        x=action.data[..., 0:1],
+        y=action.data[..., 1:2],
+        yaw=action.data[..., 2:3],
+        vel_x=action.data[..., 3:4],
+        vel_y=action.data[..., 4:5],
+        yaw_rate=action.data[..., 5:6],
+        valid=action.valid,
+    )
+  

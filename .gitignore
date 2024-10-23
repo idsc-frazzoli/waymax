@@ -1,0 +1,16 @@
+
+dataset/training/training_tfexample.tfrecord-00000-of-01000
+dataset/training/training_tfexample.tfrecord-00001-of-01000
+waymax/utils/test_utils.py
+waymax/rewards/linear_combination_reward_test.py
+/.vscode
+waymax/demo_scripts/test.py
+docs/
+rl/logs
+logs/
+wandb/
+logs/
+__pycache__
+*.egg-info
+rl/ppo/gokartlogs
+rl/ppo/waymaxlogs

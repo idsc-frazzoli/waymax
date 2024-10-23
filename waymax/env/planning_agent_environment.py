@@ -192,6 +192,7 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
         `sim_agent_actors` which are added in the step function.
     """
     self._planning_agent_dynamics = PlanningAgentDynamics(dynamics_model)
+    # TODO: (tian)
     self._state_dynamics = _dynamics.StateDynamics()
     self._reward_function = rewards.LinearCombinationReward(config.rewards)
     self.config = config
