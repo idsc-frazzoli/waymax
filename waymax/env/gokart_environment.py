@@ -30,6 +30,7 @@ from waymax import config as _config, datatypes, dynamics as _dynamics, rewards
 from waymax.agents import actor_core
 from waymax.env import typedefs as types, PlanningAgentEnvironment
 from waymax.datatypes.operations import dynamic_slice
+from waymax.utils.geometry import rotation_matrix
 
 typechecker = beartype.beartype
 
@@ -60,7 +61,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         super().__init__(dynamics_model, config, sim_agent_actors, sim_agent_params)
         self._state_dynamics = _dynamics.GoKartStateDynamics()
         self.metrics_config = dataclasses.replace(_config.MetricsConfig(),
-                                                  metrics_to_run=("offroad", "sdc_progression"))
+                                                  metrics_to_run=("offroad"))
         reward_config = _config.LinearCombinationRewardConfig(rewards={'offroad': -1.0, 'sdc_progression': 10.0})
         self.reward_fn = rewards.LinearCombinationReward(reward_config)
         self._current_position = None
@@ -118,7 +119,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         dir_diff = sdc_yaw_curr - dir_ref  # (...,)
         dir_diff = dir_diff[..., None]  # (..., 1)
 
-        # future_track = get_future_track(state, sdc_xy_curr, nearest_index)
+        future_track, _ = get_future_track(state, sdc_xy_curr, sdc_yaw_curr, nearest_index)
 
         yaw_rate = state.current_sim_trajectory.yaw_rate[..., 0]
 
@@ -168,7 +169,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
 
         obs = jnp.concatenate(
                 [sdc_vel_curr, jnp.array([sdc_yaw_rate_curr]), dir_diff,  distance_to_edge],
-                axis=-1)  ## add information of the track? + yaw rate  
+                axis=-1)  ## add information of the track? + yaw rate  #future_track.ravel()
         # sdc_xy_curr, jnp.array([sdc_yaw_curr]), , debug_value
         return obs
 
@@ -224,15 +225,20 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         )
         state = PlanningGoKartSimState(**state)
         if rng is not None:
+            # random initial position and velocity
             keys = jax.random.split(rng, len(self._sim_agent_actors))
+            rng_p, rng_v = jax.random.split(rng)
             num_init_points = state.sdc_paths.num_points_per_path
             init_index = jax.random.randint(rng, (), 0, num_init_points)
+            # init_index = jax.random.randint(rng_p, (), 0, num_init_points)
             init_pos = state.sdc_paths.xy[..., 0, init_index, :]
             init_orint = state.sdc_paths.dir_xy[..., 0, init_index, :]
             init_yaw = jnp.arctan2(init_orint[..., 1], init_orint[..., 0])
+            init_velocity = jax.random.uniform(rng_v, (), minval=0.0, maxval=1)
             state.sim_trajectory.x = state.sim_trajectory.x.at[..., 0, 0].set(init_pos[0])
             state.sim_trajectory.y = state.sim_trajectory.y.at[..., 0, 0].set(init_pos[1])
             state.sim_trajectory.yaw = state.sim_trajectory.yaw.at[..., 0, 0].set(init_yaw)
+            # state.sim_trajectory.vel_x = state.sim_trajectory.vel_x.at[..., 0, 0].set(init_velocity)
 
         else:
             keys = [None] * len(self._sim_agent_actors)
@@ -598,7 +604,7 @@ def calculate_distances_to_boundary(
         car_position: Float[Array, "2"],
         car_yaw: Float[Array, ""],
         boundary_points: Float[Array, "N 2"],
-        num_rays: int = 8,
+        num_rays: int = 11,
         max_distance: float = 0.1):
     """
     calculate distances to boundary in different directions
@@ -666,38 +672,17 @@ def check_greater(a: Array, b: Array):
     condition = jnp.all(a > b)
     checkify.check(condition, f"Assertion failed: is not greater than {b}")
 
-def get_future_track(state: PlanningGoKartSimState, car_pos, nearest_index, num_points=60):
+def get_future_track(state: PlanningGoKartSimState, car_pos, car_orientation, nearest_index, num_points=60):
     """
     Get the reference path (centerline) ahead of the car (60 points ~= 6m) # TODO based on velocity??
     """
     roadgraph_points = state.roadgraph_points.xy
-
-    def within_bounds():
-        # Using dynamic_slice_in_dim to slice along the first dimension (rows)
-        return jax.lax.dynamic_slice_in_dim(roadgraph_points, nearest_index, num_points, axis=0)
-
-    def out_of_bounds():
-        # Handle the wrap-around case by slicing in two parts and concatenating
-        slice_size1 = jnp.minimum(2000 - nearest_index, num_points)
-        slice_size2 = num_points - slice_size1
-
-        # slice_size1 = slice_size1.astype(jnp.int32)
-        # slice_size2 = slice_size2.astype(jnp.int32)
-        
-        part1 = jax.lax.dynamic_slice_in_dim(roadgraph_points, nearest_index, slice_size1, axis=0)
-        part2 = jax.lax.dynamic_slice_in_dim(roadgraph_points, 0, slice_size2, axis=0)
-        return jnp.concatenate([part1, part2], axis=0)
-
-    # jax.lax.cond will check (trace) the code in both branches even if it only executes one of them at runtime. 
-    # It's important to ensure that both branches have identical output types
-    cond = jnp.any(nearest_index < 2000 - num_points)
-    cond = cond.astype(jnp.bool)
-    track_points = jax.lax.cond(
-        cond,
-        within_bounds,
-        out_of_bounds
-    )
-
-    # future_track = jnp.concatenate([center_track_points, left_track_points, right_track_points], axis=-2)
-    relative_track = track_points - car_pos
-    return relative_track
+    n = jnp.int32(roadgraph_points.shape[0]/3)
+    # idxs = (jnp.arange(nearest_index, nearest_index + num_points) % n)
+    idxs = (nearest_index + jnp.arange(num_points)) % n 
+    # track_points = roadgraph_points[idxs, :]
+    track_points = jnp.take_along_axis(roadgraph_points, idxs[:, None], axis=0)
+    relative_track = track_points - car_pos # TODO consider the orientation of the car
+    r_matrix = rotation_matrix(car_orientation)
+    relative_track_local = relative_track @ r_matrix
+    return relative_track_local, track_points
