@@ -157,7 +157,7 @@ def generate_racing_track(x, y, r, num_points=2001, batch_size=None):
     return roadgraph_points, jnp.array(x_center), jnp.array(y_center), cumulative_length
 
 
-def create_init_state(num_timesteps=300):
+def create_init_state(num_timesteps=300)->datatypes.GoKartSimState:
     """
     create a GoKartSimState object with the generated track
     Since we don't have a log trajectory, we set the first point of the log trajectory to the first point of the centerline and
