@@ -198,7 +198,8 @@ def filter_topk_roadgraph_points(
     distances = jnp.linalg.norm(
         reference_points[..., jnp.newaxis, :] - roadgraph.xy, axis=-1
     )
-    valid_distances = jnp.where(roadgraph.valid, distances, float('inf'))
+    # valid_distances = jnp.where(roadgraph.valid, distances, float('inf'))
+    valid_distances = jnp.where(jnp.logical_and(roadgraph.valid, is_road_edge(roadgraph.types)), distances, float('inf'))
     _, top_idx = jax.lax.top_k(-valid_distances, topk)
 
     stacked = jnp.stack(

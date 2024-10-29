@@ -83,7 +83,7 @@ class StateDynamics(abstract_dynamics.DynamicsModel):
     """
     del metadata  # Not used.
     # Shape: (..., num_objects, num_timesteps, 5)
-    stacked = trajectory.stack_fields(abstract_dynamics.CONTROLLABLE_FIELDS)
+    stacked = trajectory.stack_fields(trajectory.controllable_fields)
     # Shape: (..., num_objects, num_timesteps=1, 5)
     stacked = jax.lax.dynamic_slice_in_dim(
         stacked, start_index=timestep + 1, slice_size=1, axis=-2
