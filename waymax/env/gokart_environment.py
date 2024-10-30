@@ -343,12 +343,12 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         """
         progression_reward = self._compute_progression_reward(last_state, state, dir_ref)
         orientation_reward = self._compute_orientation_reward(state, dir_ref)
-        offboard_reward = self._compute_offroad_reward(state, done)
-        reward = progression_reward + orientation_reward + offboard_reward
+        offroad_reward = self._compute_offroad_reward(state, done)
+        reward = progression_reward + orientation_reward + offroad_reward
         reward_dict = {
                 "progression_reward": progression_reward,
                 "orientation_reward": orientation_reward,
-                "offroad_reward": offboard_reward
+                "offroad_reward": offroad_reward
         }
         # reward = orientation_reward
         return reward, reward_dict
