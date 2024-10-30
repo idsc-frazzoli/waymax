@@ -392,7 +392,7 @@ def transform_traffic_lights(
 
 
 def transform_observation(
-    observation: Observation, pose2d: ObjectPose2D
+    observation: Observation, pose2d: ObjectPose2D, verbose: bool = False
 ) -> Observation:
   """Transforms a Observation into coordinates specified by pose2d.
 
@@ -424,7 +424,11 @@ def transform_observation(
       pose2d=pose2d,
   )
   obs.validate()
-  return obs
+  # return obs
+  if not verbose:
+    return obs
+  else:
+    return obs, pose
 
 
 def combine_two_object_pose_2d(
@@ -611,6 +615,7 @@ def sdc_observation_from_state(
     obs_num_steps: int = 1,
     roadgraph_top_k: int = 1000,
     coordinate_frame: config.CoordinateFrame = (config.CoordinateFrame.SDC),
+    verbose: bool = False,
 ) -> Observation:
   """Constructs Observation from SimulatorState for SDC only (jit-able).
 
@@ -667,7 +672,7 @@ def sdc_observation_from_state(
         xy=sdc_xy, yaw=sdc_yaw, valid=sdc_valid
     )
     chex.assert_equal(pose2d.shape, state.shape + (1,))
-    return transform_observation(global_obs_filter, pose2d)
+    return transform_observation(global_obs_filter, pose2d, verbose)
   elif coordinate_frame == config.CoordinateFrame.GLOBAL:
     return global_obs_filter
   else:

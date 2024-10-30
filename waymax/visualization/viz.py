@@ -248,6 +248,7 @@ def plot_simulator_state(
     viz_config: Optional[dict[str, Any]] = None,
     batch_idx: int = -1,
     highlight_obj: waymax_config.ObjectType = waymax_config.ObjectType.SDC,
+    ref: bool = False,
 ) -> np.ndarray:
   """Plots np array image for SimulatorState.
 
@@ -286,6 +287,21 @@ def plot_simulator_state(
   plot_trajectory(
       ax, traj, is_controlled, time_idx=state.timestep, indices=indices
   )  # pytype: disable=wrong-arg-types  # jax-ndarray
+  if ref:
+    ref_traj = state.log_trajectory
+    traj_5dof = np.array(
+      ref_traj.stack_fields(['x', 'y', 'length', 'width', 'yaw'])
+    )  # Forces to np from jnp
+
+    valid_controlled = is_controlled[:, np.newaxis] & ref_traj.valid
+    ax.plot(
+        traj_5dof[valid_controlled][::5, 0],
+        traj_5dof[valid_controlled][::5, 1],
+        '-',
+        color=np.array([0.0, 0.0, 1.0]),
+        ms=1,
+        alpha=0.5,
+    )
 
   # 2. Plots road graph elements.
   plot_roadgraph_points(ax, state.roadgraph_points, verbose=False)
