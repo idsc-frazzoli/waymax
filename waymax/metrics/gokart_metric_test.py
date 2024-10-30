@@ -46,6 +46,58 @@ class GokartProgressMetricTest(tf.test.TestCase, parameterized.TestCase):
         result = metric.compute(new_state)
         self.assertGreaterEqual(result.value, 0.0)
 
+    def test_progress_in_wrong_direction(self):
+        metric = GokartProgressMetric()
+        state = create_init_state(num_timesteps=100)
+        dynamics_model = TricycleModel(gk_geometry=GoKartGeometry(), model_params=TricycleParams(),
+                                        paj_params=PajieckaParams(), dt=0.1, normalize_actions=True, )
+
+        env = GokartRacingEnvironment(
+                dynamics_model=dynamics_model,
+                config=dataclasses.replace(
+                        _config.EnvironmentConfig(),
+                        max_num_objects=1,
+                        init_steps=1  # => state.timestep = 0
+                ),
+        )
+        # steering, left acceleration, right acceleration
+        raw_action = jnp.array([0.0, 0.1, 0.1])
+        action = datatypes.Action(data=raw_action, valid=jnp.array([True]))
+
+        _, state = env.reset(state)
+        # set the initial velocity to -2, so the car is moving backwards
+        state.sim_trajectory.vel_x = state.sim_trajectory.vel_x.at[..., 0, 0].set(-2)
+        _, new_state, _, _, _ = env.step(state, action=action)
+        result = metric.compute(new_state)
+        self.assertEqual(result.value, 0.0)
+
+    def test_progress_when_completing_lap(self):
+        metric = GokartProgressMetric()
+        state = create_init_state(num_timesteps=100)
+        dynamics_model = TricycleModel(gk_geometry=GoKartGeometry(), model_params=TricycleParams(),
+                                        paj_params=PajieckaParams(), dt=0.1, normalize_actions=True, )
+
+        env = GokartRacingEnvironment(
+                dynamics_model=dynamics_model,
+                config=dataclasses.replace(
+                        _config.EnvironmentConfig(),
+                        max_num_objects=1,
+                        init_steps=1  # => state.timestep = 0
+                ),
+        )
+        # steering, left acceleration, right acceleration
+        raw_action = jnp.array([0.0, 0.1, 0.1])
+        action = datatypes.Action(data=raw_action, valid=jnp.array([True]))
+
+        _, state = env.reset(state)
+        state.sim_trajectory.vel_x = state.sim_trajectory.vel_x.at[..., 0, 0].set(6)
+        current_x = state.current_sim_trajectory.x[..., 0, 0]
+        current_x -= 0.3 # a little before the end of the lap
+        state.sim_trajectory.x = state.sim_trajectory.x.at[..., 0, 0].set(current_x)
+        _, new_state, _, _, _ = env.step(state, action=action)
+        result = metric.compute(new_state)
+        self.assertGreater(result.value, 0.5)
+
 class GokartOrientationMetricTest(tf.test.TestCase, parameterized.TestCase):
     def test_zero_velocity(self):
         metric = GokartOrientationMetric()
