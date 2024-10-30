@@ -9,7 +9,7 @@ from absl.testing import parameterized
 from waymax import config as _config, datatypes
 from waymax.dynamics.tricycle_model import TricycleModel
 from waymax.env import GokartRacingEnvironment
-from waymax.metrics.gokart_metric import GokartProgressMetric, GokartOrientationMetric
+from waymax.metrics.gokart_metric import GokartProgressMetric, GokartOrientationMetric, GokartOffroadMetric
 from waymax.utils.gokart_config import GoKartGeometry, PajieckaParams, TricycleParams
 from waymax.utils.gokart_utils import create_init_state
 
@@ -135,10 +135,30 @@ class GokartOrientationMetricTest(tf.test.TestCase, parameterized.TestCase):
                 keepdims=False,
         )
         wrong_orientation = sdc_yaw_curr + jnp.pi
-        print(f"wrong_orientation: {wrong_orientation}")
         state.sim_trajectory.yaw = state.sim_trajectory.yaw.at[..., 0, 0].set(wrong_orientation)
         result = metric.compute(state)
         self.assertLess(result.value, 0.0)
+
+
+class GokartOffroadMetricTest(tf.test.TestCase, parameterized.TestCase):
+    def test_onroad(self):
+        metric = GokartOffroadMetric()
+        state = create_init_state(num_timesteps=100)
+        result = metric.compute(state)
+        # should be zero, because the car is not offroad
+        self.assertEqual(result.value, 0.0)
+
+    def test_offroad(self):
+        metric = GokartOffroadMetric()
+        state = create_init_state(num_timesteps=100)
+        current_y = state.current_sim_trajectory.x[..., 0, 0]
+        # move the car offroad
+        current_y -= 2 
+        state.sim_trajectory.y = state.sim_trajectory.y.at[..., 0, 0].set(current_y)
+        result = metric.compute(state)
+        # should be negative, because the car is offroad
+        self.assertEqual(result.value, -1.0)
+
 
 if __name__ == '__main__':
   tf.test.main()

@@ -3,6 +3,7 @@ from jax import numpy as jnp
 
 from waymax import datatypes
 from waymax.metrics import abstract_metric, MetricResult
+from waymax.metrics.roadgraph import OffroadMetric
 
 
 class GokartProgressMetric(abstract_metric.AbstractMetric):
@@ -128,12 +129,11 @@ class GokartOrientationMetric(abstract_metric.AbstractMetric):
 
     @jax.named_scope('GokartOrientationMetric.compute')
     def compute(self, state: datatypes.GoKartSimState) -> MetricResult:
-        """Computes the orientation reward. The car is rewarded for moving in the direction of the nearest point on the reference track(centerline).
-        This reward is also scaled by the velocity of the car in the direction of the reference track.
+        """
+        Computes the orientation reward. The car is rewarded for moving in the direction of the nearest point on the reference track(centerline).
 
         Args:
         state: The current state of the simulator.
-        dir_ref: The reference direction of the self-driving car.
 
         Returns:
         The orientation reward.
@@ -196,7 +196,6 @@ class GokartOrientationMetric(abstract_metric.AbstractMetric):
                 keepdims=False,
         )
         yaw_vector = jnp.array([jnp.cos(sdc_yaw_curr), jnp.sin(sdc_yaw_curr)])  # (..., 2)
-        print(f"yaw_vector: {yaw_vector}")
         # encourage the car to move in the direction of the reference track(centerline)
         orientation_reward = jnp.dot(yaw_vector, dir_ref)  # (...,)
         # negative reward if the car is moving in the opposite direction, although the orientation is correct
@@ -205,4 +204,18 @@ class GokartOrientationMetric(abstract_metric.AbstractMetric):
         return MetricResult.create_and_validate(
                 value=orientation_reward,
                 valid=jnp.ones(orientation_reward.shape, dtype=bool)
+        )
+    
+class GokartOffroadMetric(OffroadMetric):
+    
+    @jax.named_scope('GokartOffroadMetric.compute')
+    def compute(self, state: datatypes.GoKartSimState) -> MetricResult:
+        is_offroad = super().compute(state)
+        # value = 1 if offroad
+        is_offroad = is_offroad.value.astype(jnp.bool)
+        # get a negative reward if the car is offroad
+        offroad_reward = jnp.where(is_offroad, -1.0, 0)
+        return MetricResult.create_and_validate(
+                value=offroad_reward,
+                valid=jnp.ones_like(offroad_reward, dtype=bool)
         )

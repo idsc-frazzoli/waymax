@@ -272,24 +272,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         )
         
         state = super().step(state, action)
-        # current_pos_xy = state.current_sim_trajectory.xy[..., 0, :]
-        # # shape: (...,2)
-        # current_sdc_xy = datatypes.select_by_onehot(
-        #     current_pos_xy,
-        #     state.object_metadata.is_sdc,
-        #     keepdims=False,
-        # )
-        # movement_vector = current_sdc_xy - last_sdc_xy
         dir_ref, _ = self.get_ref_direction(state)
-        # last_metric_dict = metrics.run_metrics(last_state, self.metrics_config)
-        # metric_dict = metrics.run_metrics(state, self.metrics_config)
-        # progression_reward = 1000 * (metric_dict["sdc_progression"].value - last_metric_dict["sdc_progression"].value)
-        # # progression_reward = self._compute_progression_reward(last_state, state)
-        # progression_reward = jnp.where(
-        #   jnp.dot(movement_vector, dir_ref) > 0,
-        #   progression_reward,
-        #   0) # no reward if the self-driving car is moving in the wrong direction (TODO:signed progression reward)
-        # reward, reward_dict = self.compute_reward(last_state, state, dir_ref)
         obs = self.observe(state)
         done = self.check_termination(state)
         reward, reward_dict = self.compute_reward(last_state, state, dir_ref, done)
