@@ -36,6 +36,7 @@ _METRICS_REGISTRY: dict[str, abstract_metric.AbstractMetric] = {
     'sdc_off_route': route.OffRouteMetric(),
     'gokart_progress': gokart_metric.GokartProgressMetric(),
     'gokart_orientation': gokart_metric.GokartOrientationMetric(),
+    'gokart_offroad': gokart_metric.GokartOffroadMetric(),
 }
 
 

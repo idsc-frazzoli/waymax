@@ -27,3 +27,4 @@ from waymax.metrics.route import OffRouteMetric
 from waymax.metrics.route import ProgressionMetric
 from waymax.metrics.gokart_metric import GokartProgressMetric
 from waymax.metrics.gokart_metric import GokartOrientationMetric
+from waymax.metrics.gokart_metric import GokartOffroadMetric

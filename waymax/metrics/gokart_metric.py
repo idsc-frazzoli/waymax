@@ -20,12 +20,7 @@ class GokartProgressMetric(abstract_metric.AbstractMetric):
                     'SimulatorState.sdc_paths required to compute the route progression '
                     'metric.'
             )
-        # todo check timestep -1 is not out of bounds
-        if state.timestep <= 0:
-            return MetricResult.create_and_validate(
-                    value=jnp.zeros(state.sim_trajectory.x.shape[:-2]),
-                    valid=jnp.zeros(state.sim_trajectory.x.shape[:-2], dtype=bool),
-            )
+
         # Shape: (..., num_objects, num_timesteps=1, 2)
         obj_xy_last = datatypes.dynamic_slice(
                 state.sim_trajectory.xy,
@@ -72,9 +67,6 @@ class GokartProgressMetric(abstract_metric.AbstractMetric):
         # (...) find the minimum distance to the nearest path
         min_dist_path = jnp.min(dist2centerline, axis=(-1, -2))
 
-        # (..., num_paths=1, 1, 2) find the direction of the centerline at the nearest point
-        dir_ref = jnp.take_along_axis(state.sdc_paths.dir_xy, idx[..., None], axis=-2)  
-        dir_ref = jnp.squeeze(dir_ref, axis=(-2, -3))  # (...,2)
 
         # Shape: (..., max(num_points_per_path))
         ref_path = jax.tree_util.tree_map(
@@ -90,11 +82,14 @@ class GokartProgressMetric(abstract_metric.AbstractMetric):
             dist = jnp.where(path.valid, dist_raw, jnp.inf)
             idx = jnp.argmin(dist, axis=-1, keepdims=True)
             # (..., )
-            return jnp.take_along_axis(path.arc_length, indices=idx, axis=-1)[..., 0]
+            return jnp.take_along_axis(path.arc_length, indices=idx, axis=-1)[..., 0], idx
 
-        last_dist = get_arclength_for_pts(sdc_xy_last, ref_path)
-        curr_dist = get_arclength_for_pts(sdc_xy_curr, ref_path)
+        last_dist, last_idx = get_arclength_for_pts(sdc_xy_last, ref_path)
+        curr_dist, curr_idx = get_arclength_for_pts(sdc_xy_curr, ref_path)
 
+        # (..., num_paths=1, 1, 2) find the direction of the centerline at the nearest point
+        dir_ref = jnp.take_along_axis(state.sdc_paths.dir_xy.squeeze(-3), curr_idx[..., None], axis=-2)  
+        dir_ref = jnp.squeeze(dir_ref, axis=-2)  # (...,2)
         # Normalized one by waymo
         # progress = jnp.where(
         #     end_dist == start_dist,
@@ -119,10 +114,12 @@ class GokartProgressMetric(abstract_metric.AbstractMetric):
         # (in this case, the progress is negative, so we need to add the path length)
         # a small progress 0.1 between the last point and the first point of the path
         progress = jnp.where(progress < -path_length / 2, path_length + progress + 0.1, progress)
+        
+        progress = jnp.where(state.timestep <= 0, jnp.zeros(state.sim_trajectory.x.shape[:-2]), progress)
+        # print(f"progress: {progress}")
         return MetricResult.create_and_validate(
-                value=progress,
-                valid=jnp.ones(progress.shape, dtype=bool)
-        )
+                value = progress,
+                valid = jnp.ones(progress.shape, dtype=bool))
 
 
 class GokartOrientationMetric(abstract_metric.AbstractMetric):
@@ -198,9 +195,11 @@ class GokartOrientationMetric(abstract_metric.AbstractMetric):
         yaw_vector = jnp.array([jnp.cos(sdc_yaw_curr), jnp.sin(sdc_yaw_curr)])  # (..., 2)
         # encourage the car to move in the direction of the reference track(centerline)
         orientation_reward = jnp.dot(yaw_vector, dir_ref)  # (...,)
-        # negative reward if the car is moving in the opposite direction, although the orientation is correct
-        orientation_reward *= jnp.sign(sdc_vel_curr[0])  # (...,) vx
+        orientation_reward = jnp.where(orientation_reward > 0, orientation_reward, 0)
+        # scaled by the velocity, negative if the car is moving in the opposite direction
+        orientation_reward *= sdc_vel_curr[0]  # (...,) vx
         orientation_reward = jnp.clip(orientation_reward, -1, 1) # 0.05
+
         return MetricResult.create_and_validate(
                 value=orientation_reward,
                 valid=jnp.ones(orientation_reward.shape, dtype=bool)

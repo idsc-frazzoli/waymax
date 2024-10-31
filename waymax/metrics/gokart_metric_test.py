@@ -125,7 +125,7 @@ class GokartOrientationMetricTest(tf.test.TestCase, parameterized.TestCase):
     def test_wrong_orientation(self):
         metric = GokartOrientationMetric()
         state = create_init_state(num_timesteps=100)
-        state.sim_trajectory.vel_x = state.sim_trajectory.vel_x.at[..., 0, 0].set(1)
+        state.sim_trajectory.vel_x = state.sim_trajectory.vel_x.at[..., 0, 0].set(-1)
         # shape: (..., num_objects, timesteps=1) -> (..., num_objects)
         yaw = state.current_sim_trajectory.yaw[..., 0]
 
@@ -137,7 +137,7 @@ class GokartOrientationMetricTest(tf.test.TestCase, parameterized.TestCase):
         wrong_orientation = sdc_yaw_curr + jnp.pi
         state.sim_trajectory.yaw = state.sim_trajectory.yaw.at[..., 0, 0].set(wrong_orientation)
         result = metric.compute(state)
-        self.assertLess(result.value, 0.0)
+        self.assertEqual(result.value, 0.0)
 
 
 class GokartOffroadMetricTest(tf.test.TestCase, parameterized.TestCase):

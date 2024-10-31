@@ -61,12 +61,10 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         super().__init__(dynamics_model, config, sim_agent_actors, sim_agent_params)
         self._state_dynamics = _dynamics.GoKartStateDynamics()
         self.metrics_config = dataclasses.replace(_config.MetricsConfig(),
-                                                  metrics_to_run=("offroad"))
-        reward_config = _config.LinearCombinationRewardConfig(rewards={'offroad': -1.0, 'sdc_progression': 10.0})
-        self.reward_fn = rewards.LinearCombinationReward(reward_config)
-        self._current_position = None
-        self._current_yaw = None
-        self._current_velocity = None
+                                                  metrics_to_run=("gokart_offroad", "gokart_progress", "gokart_orientation"))
+        reward_config = _config.LinearCombinationRewardConfig(
+            rewards={'gokart_offroad': 5, 'gokart_progress': 1.0, 'gokart_orientation': 0.05})
+        self._reward_function = rewards.LinearCombinationReward(reward_config)
 
     def observe(self, state: PlanningGoKartSimState) -> types.Observation:
         """Computes the observation for the given simulation state.
@@ -114,12 +112,13 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
                 keepdims=False,
         )
 
-        dir_ref, nearest_index = self.get_ref_direction(state)  # (...,2)
-        dir_ref = jnp.arctan2(dir_ref[..., 1], dir_ref[..., 0])  # (...,)
-        dir_diff = sdc_yaw_curr - dir_ref  # (...,)
-        dir_diff = dir_diff[..., None]  # (..., 1)
+        dir_ref, nearest_index = self.get_ref_direction(state)  # (...,num,2)
+        dir_ref = jnp.arctan2(dir_ref[..., 1], dir_ref[..., 0])  # (...,num)
+        # dir_diff = sdc_yaw_curr - dir_ref  # (...,)
 
-        future_track, _ = get_future_track(state, sdc_xy_curr, sdc_yaw_curr, nearest_index)
+        dir_diff = dir_ref - sdc_yaw_curr  # (...,num)
+        # jax.debug.breakpoint()
+        # future_track, _ = get_future_track(state, sdc_xy_curr, sdc_yaw_curr, nearest_index)
 
         yaw_rate = state.current_sim_trajectory.yaw_rate[..., 0]
 
@@ -188,15 +187,6 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         # if is_offroad | state.is_done:
         #    self.reset(state)
         condition = jnp.logical_or(is_offroad, state.is_done)
-
-        # Reset the simulator state if the condition is met.  currently not implemented!!!
-        # jnp.where returns a tuple of indices, so we need to extract the first element.
-        # reset_idx = jnp.where(condition)[0]
-
-        # if jnp.any(condition):
-        #   return True
-        # else:
-        #   return False
         return condition
 
     def reset(self, state: PlanningGoKartSimState, rng: jax.Array | None = None):
@@ -229,8 +219,10 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
             keys = jax.random.split(rng, len(self._sim_agent_actors))
             rng_p, rng_v = jax.random.split(rng)
             num_init_points = state.sdc_paths.num_points_per_path
-            init_index = jax.random.randint(rng, (), 0, num_init_points)
+            valid_index = jnp.arange(0, 2000, 400)
+            # init_index = jax.random.randint(rng, (), 0, num_init_points)
             # init_index = jax.random.randint(rng_p, (), 0, num_init_points)
+            init_index = jax.random.choice(rng, valid_index)
             init_pos = state.sdc_paths.xy[..., 0, init_index, :]
             init_orint = state.sdc_paths.dir_xy[..., 0, init_index, :]
             init_yaw = jnp.arctan2(init_orint[..., 1], init_orint[..., 0])
@@ -262,22 +254,14 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         The next simulation state after taking an action of shape (...).
         """
         # compute reward, currently only progression reward is implemented
-        last_state = copy.deepcopy(state)
-        last_pos_xy = state.current_sim_trajectory.xy[..., 0, :]
-        # shape: (...,2)
-        last_sdc_xy = datatypes.select_by_onehot(
-                last_pos_xy,
-                state.object_metadata.is_sdc,
-                keepdims=False,
-        )
+        # last_state = copy.deepcopy(state)
         
         state = super().step(state, action)
-        dir_ref, _ = self.get_ref_direction(state)
+        # dir_ref, _ = self.get_ref_direction(state)
         obs = self.observe(state)
         done = self.check_termination(state)
-        reward, reward_dict = self.compute_reward(last_state, state, dir_ref, done)
-        # reward = jnp.where(done, reward, reward+0.05) # encourage the self-driving car to stay on the track
-        # reward = jnp.where(done & jnp.logical_not(state.is_done), reward - 5, reward) # penalize the self-driving car for going off-road
+        # reward, reward_dict = self.compute_reward(last_state, state, dir_ref, done)
+        reward, reward_dict = self.compute_reward(state, action)
         obs, state = self.post_step(state, obs, done, rng)
         # done = False # for testing
         info = reward_dict
@@ -312,7 +296,8 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         )
         return obs, state
 
-    def compute_reward(self, last_state: PlanningGoKartSimState, state: PlanningGoKartSimState, dir_ref, done) -> jnp.ndarray:
+    # def compute_reward(self, last_state: PlanningGoKartSimState, state: PlanningGoKartSimState, dir_ref, done) -> jnp.ndarray:
+    def compute_reward(self, state: PlanningGoKartSimState, action: datatypes.Action):
         """Computes the reward for the given simulation state.
 
         Args:
@@ -324,16 +309,29 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         Returns:
         The reward for the given simulation state.
         """
-        progression_reward = self._compute_progression_reward(last_state, state, dir_ref)
-        orientation_reward = self._compute_orientation_reward(state, dir_ref)
-        offroad_reward = self._compute_offroad_reward(state, done)
-        reward = progression_reward + orientation_reward + offroad_reward
-        reward_dict = {
-                "progression_reward": progression_reward,
-                "orientation_reward": orientation_reward,
-                "offroad_reward": offroad_reward
-        }
+        # progression_reward = self._compute_progression_reward(last_state, state, dir_ref)
+        # orientation_reward = self._compute_orientation_reward(state, dir_ref)
+        # offroad_reward = self._compute_offroad_reward(state, done)
+        # reward = progression_reward + orientation_reward + offroad_reward
+        # reward_dict = {
+        #         "gokart_progress": progression_reward,
+        #         "gokart_orientation": orientation_reward,
+        #         "gokart_offroad": offroad_reward
+        # }
         # reward = orientation_reward
+        agent_mask = datatypes.get_control_mask(
+          state.object_metadata, self.config.controlled_object
+        )
+        multi_agent_reward, reward_dict = self._reward_function.compute(
+            state, action, agent_mask, return_reward_dict=True
+        )
+        # After onehot, shape: (...)
+        reward = datatypes.select_by_onehot(
+            multi_agent_reward, state.object_metadata.is_sdc, keepdims=False
+        )
+        reward_dict = datatypes.select_by_onehot(
+            reward_dict, state.object_metadata.is_sdc, keepdims=False
+        )
         return reward, reward_dict
 
     def _compute_progression_reward(self, last_state: PlanningGoKartSimState,
@@ -526,7 +524,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         slip_reward = jnp.clip(slip_reward, 0, 0.1)
         pass
 
-    def get_ref_direction(self, state: PlanningGoKartSimState) -> jnp.ndarray:
+    def get_ref_direction(self, state: PlanningGoKartSimState, num = 1) -> jnp.ndarray:
         """Get the reference direction of the self-driving car
         take the direction of the nearest point on the track as the reference direction
 
@@ -575,11 +573,14 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         # index of the nearest point on the reference path
         idx = jnp.argmin(dist, axis=-1, keepdims=True)  # (..., num_paths=1, 1)
 
+        if num > 1:
+            n = jnp.int32(state.roadgraph_points.shape[0]/3)
+            idx = (idx + jnp.arange(0, 10*num, 10)) % n  # (..., num_paths=1, num)
         # use the direction of the nearest sdc_path point as referece direction
-        dir_ref = jnp.take_along_axis(state.sdc_paths.dir_xy, idx[..., None], axis=-2)  # (..., num_paths=1, 1, 2)
-        dir_ref = jnp.squeeze(dir_ref, axis=(-2, -3))  # (...,2)
+        dir_ref = jnp.take_along_axis(state.sdc_paths.dir_xy, idx[..., None], axis=-2)  # (..., num_paths=1, num, 2)
+        dir_ref = jnp.squeeze(dir_ref, axis=-3)  # (...,num, 2)
 
-        return dir_ref, idx.squeeze()
+        return dir_ref, idx[0]
 
 
 @jaxtyped(typechecker=typechecker)
