@@ -76,7 +76,7 @@ class BraxWrapper:
       dynamics_model: dynamics.DynamicsModel,
       config: _config.EnvironmentConfig,
   ) -> None:
-    """Constracts the Brax wrapper over a Waymax environment.
+    """Constructs the Brax wrapper over a Waymax environment.
 
     Args:
       wrapped_env: Waymax environment to wrap with the Brax interface.
