@@ -29,7 +29,6 @@ from jaxtyping import Float, jaxtyped
 from waymax import config as _config, datatypes, dynamics as _dynamics, rewards
 from waymax.agents import actor_core
 from waymax.env import typedefs as types, PlanningAgentEnvironment
-from waymax.datatypes.operations import dynamic_slice
 from waymax.utils.geometry import rotation_matrix
 
 typechecker = beartype.beartype
@@ -61,7 +60,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         super().__init__(dynamics_model, config, sim_agent_actors, sim_agent_params)
         self._state_dynamics = _dynamics.GoKartStateDynamics()
         self.metrics_config = dataclasses.replace(_config.MetricsConfig(),
-                                                  metrics_to_run=("offroad"))
+                                                  metrics_to_run=("offroad",))
         reward_config = _config.LinearCombinationRewardConfig(rewards={'offroad': -1.0, 'sdc_progression': 10.0})
         self.reward_fn = rewards.LinearCombinationReward(reward_config)
         self._current_position = None
