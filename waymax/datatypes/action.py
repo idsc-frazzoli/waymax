@@ -139,7 +139,7 @@ class GoKartTrajectoryUpdate(TrajectoryUpdate):
     """Returns this trajectory update as a 5D Action for StateDynamics.
 
     Returns:
-      An action data structure with data of shape (..., 5) containing
+      An action data structure with data of shape (..., 6) containing
       x, y, yaw, vel_x, and vel_y.
     """
     action = jnp.concatenate(

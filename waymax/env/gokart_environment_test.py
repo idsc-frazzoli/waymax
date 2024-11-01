@@ -46,5 +46,6 @@ def test_gokart_env():
             dynamics_model=dynamics_model,
             config=env_config
     )
+    env
 
     # todo something with env

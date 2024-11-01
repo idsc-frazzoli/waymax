@@ -21,6 +21,7 @@ import beartype
 import chex
 import jax
 import jax.numpy as jnp
+from dm_env import specs
 from jax import Array
 from jax.experimental import checkify
 from jaxtyping import Float, jaxtyped
@@ -57,12 +58,16 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
     ) -> None:
         super().__init__(dynamics_model, config, sim_agent_actors, sim_agent_params)
         self._state_dynamics = _dynamics.GoKartStateDynamics()
-        self.metrics_config = dataclasses.replace(_config.MetricsConfig(),
-                                                  metrics_to_run=(
-                                                      "gokart_offroad", "gokart_progress", "gokart_orientation"))
+        self.metrics_config = dataclasses.replace(
+                _config.MetricsConfig(), metrics_to_run=(
+                    "gokart_offroad", "gokart_progress", "gokart_orientation"))
         reward_config = _config.LinearCombinationRewardConfig(
                 rewards={'gokart_offroad': 5, 'gokart_progress': 1.0, 'gokart_orientation': 0.05})
         self._reward_function = rewards.LinearCombinationReward(reward_config)
+
+    def observation_spec(self) -> types.Observation:
+        # todo add observation information (should not be from ppo config)
+        raise NotImplementedError()
 
     def observe(self, state: PlanningGoKartSimState) -> types.Observation:
         """Computes the observation for the given simulation state.
@@ -199,21 +204,31 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         state = state.replace(sim_agent_actor_states=init_actor_states)
         return state
 
-    # def step(self, state: PlanningGoKartSimState, action: datatypes.Action, rng: jax.Array | None = None):
-    #     """Advances simulation by one timestep using the dynamics model.
-    #
-    #     Args:
-    #     state: The current state of the simulator of shape (...).
-    #     action: The action to apply, of shape (..., num_objects).
-    #     rng: Optional random number generator for stochastic environments.
-    #
-    #     Returns:
-    #     The next simulation state after taking an action of shape (...).
-    #     """
+    def action_spec(self) -> datatypes.Action:
+        data_spec = self.dynamics.action_spec()  # rank 1
+        valid_spec = specs.Array(shape=(3,), dtype=jnp.bool_)
+        return datatypes.Action(data=data_spec, valid=valid_spec)
+
+    def step(self, state: PlanningGoKartSimState, action: datatypes.Action,
+             rng: jax.Array | None = None) -> PlanningGoKartSimState:
+        """
+        Advances simulation by one timestep using the dynamics model.
+
+        Args:
+        state: The current state of the simulator of shape (...).
+        action: The action to apply, of shape (..., num_objects).
+        rng: Optional random number generator for stochastic environments.
+
+        Returns:
+        The next simulation state after taking an action of shape (...).
+        """
+        new_state: PlanningGoKartSimState = super().step(state, action, rng)
+        return new_state
+
     #     # compute reward, currently only progression reward is implemented
     #     # last_state = copy.deepcopy(state)
     #
-    #     state = super().step(state, action)
+    #
     #     # dir_ref, _ = self.get_ref_direction(state)
     #     obs = self.observe(state)
     #     done = self.check_termination(state)
@@ -235,9 +250,9 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         """
         # fixme can be optimized to not recompute all the metrics
         metric_dict = self.metrics(state)
-        is_offroad = metric_dict["offroad"].value.astype(jnp.bool)
+        is_offroad = metric_dict["gokart_offroad"].value.astype(jnp.bool)
         condition = jnp.logical_or(is_offroad, state.is_done)
-        return condition
+        return condition.squeeze()
 
     def _get_ref_direction(self, state: PlanningGoKartSimState, num=1) -> jnp.ndarray:
         """Get the reference direction of the self-driving car
