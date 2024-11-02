@@ -157,7 +157,7 @@ def generate_racing_track(x, y, r, num_points=2001, batch_size=None):
     return roadgraph_points, jnp.array(x_center), jnp.array(y_center), cumulative_length
 
 
-def create_init_state(num_timesteps=300)->datatypes.GoKartSimState:
+def create_init_state(num_timesteps=300) -> datatypes.GoKartSimState:
     """
     create a GoKartSimState object with the generated track
     Since we don't have a log trajectory, we set the first point of the log trajectory to the first point of the centerline and
@@ -165,6 +165,7 @@ def create_init_state(num_timesteps=300)->datatypes.GoKartSimState:
     (see metric sdc_progression)
     We use the centerline as the sdc path (reference path)
     """
+    # fixme can we simply create with batch 1 and then squeeze?
     trajectory = datatypes.GoKartTrajectory.zeros((1, num_timesteps))  # 1 object, 200 time steps
     sim_trajectory = trajectory
     sim_trajectory.length = jnp.ones_like(sim_trajectory.length) * 1.5
@@ -229,10 +230,11 @@ def create_init_state(num_timesteps=300)->datatypes.GoKartSimState:
             object_metadata=metadata, timestep=timestep, roadgraph_points=roadgraph_points, sdc_paths=sdc_path)
 
 
-def create_batch_init_state(batch_size=2, num_timesteps=200):
-    '''
+def create_batch_init_state(batch_size: int = 2, num_timesteps: int = 200) -> datatypes.GoKartSimState:
+    """
     create a GoKartSimState with batch_size
-    '''
+    """
+    assert batch_size > 0
     sim_trajectory = datatypes.GoKartTrajectory.zeros((batch_size, 1, num_timesteps))  # 1 object, 200 time steps
     sim_trajectory.length = jnp.ones_like(sim_trajectory.length) * 1.5
     sim_trajectory.width = jnp.ones_like(sim_trajectory.width)
@@ -297,7 +299,10 @@ def create_batch_init_state(batch_size=2, num_timesteps=200):
     log_trajectory.x = log_trajectory.x.at[:, 0, -1].set(x_center[-1])
     log_trajectory.y = log_trajectory.y.at[:, 0, -1].set(y_center[-1])
 
-    return datatypes.GoKartSimState(sim_trajectory=sim_trajectory, log_trajectory=log_trajectory,
+    return datatypes.GoKartSimState(sim_trajectory=sim_trajectory,
+                                    log_trajectory=log_trajectory,
                                     log_traffic_light=traffic_light,
-                                    object_metadata=metadata, timestep=timestep, roadgraph_points=roadgraph_points,
+                                    object_metadata=metadata,
+                                    timestep=timestep,
+                                    roadgraph_points=roadgraph_points,
                                     sdc_paths=sdc_path)
