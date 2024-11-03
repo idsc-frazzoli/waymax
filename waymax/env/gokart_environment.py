@@ -21,7 +21,7 @@ import beartype
 import chex
 import jax
 import jax.numpy as jnp
-from dm_env import specs
+from dm_env.specs import BoundedArray
 from jax import Array
 from jax.experimental import checkify
 from jaxtyping import Float, jaxtyped
@@ -65,9 +65,14 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
                 rewards={'gokart_offroad': 5, 'gokart_progress': 1.0, 'gokart_orientation': 0.05})
         self._reward_function = rewards.LinearCombinationReward(reward_config)
 
-    def observation_spec(self) -> types.Observation:
+    def observation_spec(self) -> BoundedArray:
         # todo add observation information (should not be from ppo config)
-        raise NotImplementedError()
+        # create obs type for teh gokart environment
+        dim = 15
+        minimum = -jnp.array([jnp.inf] * dim)
+        maximum = jnp.array([jnp.inf] * dim)
+        specs = BoundedArray((15,), jnp.float32, minimum, maximum)
+        return specs
 
     def observe(self, state: PlanningGoKartSimState) -> types.Observation:
         """Computes the observation for the given simulation state.
@@ -204,10 +209,9 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         state = state.replace(sim_agent_actor_states=init_actor_states)
         return state
 
-    def action_spec(self) -> datatypes.Action:
+    def action_spec(self) -> BoundedArray:
         data_spec = self.dynamics.action_spec()  # rank 1
-        valid_spec = specs.Array(shape=(3,), dtype=jnp.bool_)
-        return datatypes.Action(data=data_spec, valid=valid_spec)
+        return data_spec
 
     def step(self, state: PlanningGoKartSimState, action: datatypes.Action,
              rng: jax.Array | None = None) -> PlanningGoKartSimState:
