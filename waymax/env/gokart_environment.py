@@ -166,7 +166,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
 
 
         obs = jnp.concatenate(
-                [sdc_vel_curr, jnp.array([sdc_yaw_rate_curr]), dir_diff,  distance_to_edge],
+                [sdc_vel_curr, jnp.array([sdc_yaw_rate_curr]), dir_diff,  distance_to_edge, sdc_xy_curr],
                 axis=-1)  ## add information of the track? + yaw rate  #future_track.ravel()
         # sdc_xy_curr, jnp.array([sdc_yaw_curr]), , debug_value
         return obs
