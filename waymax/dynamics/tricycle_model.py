@@ -73,9 +73,10 @@ class TricycleModel(DynamicsModel):
     self._max_steering = max_steering
     self._normalize_actions = normalize_actions
 
-  def action_spec(self) -> specs.BoundedArray:
+  def action_spec(self, opposite_normalize_actions = False) -> specs.BoundedArray:
     """Action spec for the acceleration steering continuous action space."""
-    if not self._normalize_actions:
+    normalize_actions = self._normalize_actions ^ opposite_normalize_actions
+    if not normalize_actions:
       return specs.BoundedArray(
           # last dim: (acceleration, steering)
           shape=(3,),
