@@ -31,6 +31,8 @@ from waymax.agents import actor_core
 from waymax.env import typedefs as types, PlanningAgentEnvironment
 from waymax.utils.geometry import rotation_matrix
 
+from scipy.stats import norm, uniform, gaussian_kde
+
 typechecker = beartype.beartype
 
 
@@ -44,25 +46,27 @@ class PlanningGoKartSimState(datatypes.GoKartSimState):
         will be updated. The list of sim agent states should be as long as and in
         the same order as the number of sim agents run in the environment.
     """
+
     sim_agent_actor_states: Sequence[actor_core.ActorState] = ()
 
 
 class GokartRacingEnvironment(PlanningAgentEnvironment):
 
     def __init__(
-            self,
-            dynamics_model: _dynamics.DynamicsModel,
-            config: _config.EnvironmentConfig,
-            sim_agent_actors: Sequence[actor_core.WaymaxActorCore] = (),
-            sim_agent_params: Sequence[actor_core.Params] = (),
+        self,
+        dynamics_model: _dynamics.DynamicsModel,
+        config: _config.EnvironmentConfig,
+        sim_agent_actors: Sequence[actor_core.WaymaxActorCore] = (),
+        sim_agent_params: Sequence[actor_core.Params] = (),
     ) -> None:
         super().__init__(dynamics_model, config, sim_agent_actors, sim_agent_params)
         self._state_dynamics = _dynamics.GoKartStateDynamics()
         self.metrics_config = dataclasses.replace(
-                _config.MetricsConfig(), metrics_to_run=(
-                    "gokart_offroad", "gokart_progress", "gokart_orientation"))
+            _config.MetricsConfig(), metrics_to_run=("gokart_offroad", "gokart_progress", "gokart_orientation")
+        )
         reward_config = _config.LinearCombinationRewardConfig(
-                rewards={'gokart_offroad': 5, 'gokart_progress': 1.0, 'gokart_orientation': 0.05})
+            rewards={"gokart_offroad": 5, "gokart_progress": 1.0, "gokart_orientation": 0.05}
+        )
         self._reward_function = rewards.LinearCombinationReward(reward_config)
 
     def observation_spec(self) -> BoundedArray:
@@ -95,29 +99,30 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
           dir_diff: difference between the current orientation of the self-driving car and the orientation of the nearest point on the track
           distance_to_edge: distance to the track boundary in different directions
         """
+
         # shape: (..., num_objects, timesteps=1, 2) -> (..., num_objects, 2)
         pos_xy = state.current_sim_trajectory.xy[..., 0, :]
         vel_xy = state.current_sim_trajectory.vel_xy[..., 0, :]
 
         # shape: (...,2)
         sdc_xy_curr = datatypes.select_by_onehot(
-                pos_xy,
-                state.object_metadata.is_sdc,
-                keepdims=False,
+            pos_xy,
+            state.object_metadata.is_sdc,
+            keepdims=False,
         )
         sdc_vel_curr = datatypes.select_by_onehot(
-                vel_xy,
-                state.object_metadata.is_sdc,
-                keepdims=False,
+            vel_xy,
+            state.object_metadata.is_sdc,
+            keepdims=False,
         )
 
         # shape: (..., num_objects, timesteps=1) -> (..., num_objects)
         yaw = state.current_sim_trajectory.yaw[..., 0]
 
         sdc_yaw_curr = datatypes.select_by_onehot(
-                yaw,
-                state.object_metadata.is_sdc,
-                keepdims=False,
+            yaw,
+            state.object_metadata.is_sdc,
+            keepdims=False,
         )
 
         dir_ref, nearest_index = self._get_ref_direction(state)  # (...,num,2)
@@ -131,10 +136,11 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         yaw_rate = state.current_sim_trajectory.yaw_rate[..., 0]
 
         sdc_yaw_rate_curr = datatypes.select_by_onehot(
-                yaw_rate,
-                state.object_metadata.is_sdc,
-                keepdims=False,
+            yaw_rate,
+            state.object_metadata.is_sdc,
+            keepdims=False,
         )
+        sdc_yaw_rate_curr = jnp.array([sdc_yaw_rate_curr])
 
         # TODO: for testing, need to find a better way to get the edge points
         edge_points = state.roadgraph_points.xy[..., 2000:, :]
@@ -142,18 +148,33 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         # todo move to always have a batch dimention?
         if len(sdc_xy_curr.shape) == 1:  # no batch dimension
             assert len(edge_points.shape) == 2
-            distance_to_edge, _, debug_value = calculate_distances_to_boundary(
-                    sdc_xy_curr, sdc_yaw_curr, edge_points)
+            distance_to_edge, _, debug_value = calculate_distances_to_boundary(sdc_xy_curr, sdc_yaw_curr, edge_points)
         else:
-            distance_to_edge, _, _ = jax.vmap(
-                    calculate_distances_to_boundary, in_axes=(0, 0, 0))(
-                    sdc_xy_curr,
-                    sdc_yaw_curr,
-                    edge_points)
+            distance_to_edge, _, _ = jax.vmap(calculate_distances_to_boundary, in_axes=(0, 0, 0))(
+                sdc_xy_curr, sdc_yaw_curr, edge_points
+            )
+
+        # TODO domain randomization/sampler
+        ndm = True
+        if ndm is True:
+            # Step 0: Initialize random key for JAX and hardcode mu and sigma (TODO: config)
+            key = jax.random.PRNGKey(0)
+            num_samples = sdc_vel_curr.val.shape[0]
+            rand_dim = 2
+            mu = jnp.zeros(shape=sdc_vel_curr.val.shape)
+            sigma = jnp.multiply(jnp.array([0.173, 0.139]), jnp.ones(shape=sdc_vel_curr.val.shape))
+
+            # Step 1: Generate uniform random samples for each state
+            uniform_samples = jax.random.uniform(key, shape=(num_samples, rand_dim), minval=0, maxval=1)
+
+            # Step 2: Use the inverse CDF (percent-point function) for each state
+            normal_samples = norm.ppf(uniform_samples, loc=mu, scale=sigma)
+
+            sdc_vel_curr.val += normal_samples
 
         obs = jnp.concatenate(
-                [sdc_vel_curr, jnp.array([sdc_yaw_rate_curr]), dir_diff, distance_to_edge],
-                axis=-1)  ## add information of the track? + yaw rate  #future_track.ravel()
+            [sdc_vel_curr, sdc_yaw_rate_curr, dir_diff, distance_to_edge], axis=-1
+        )  ## add information of the track? + yaw rate  #future_track.ravel()
         # sdc_xy_curr, jnp.array([sdc_yaw_curr]), , debug_value
         return obs
 
@@ -167,20 +188,12 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         Returns:
           A new state of the simulator after resetting.
         """
-        chex.assert_equal(
-                self.config.max_num_objects, state.log_trajectory.num_objects
-        )
+        chex.assert_equal(self.config.max_num_objects, state.log_trajectory.num_objects)
 
         # Fills with invalid values (i.e. -1.) and False.
-        sim_traj_uninitialized = datatypes.fill_invalid_trajectory(
-                state.log_trajectory
-        )
-        state_uninitialized = state.replace(
-                timestep=jnp.array(-1), sim_trajectory=sim_traj_uninitialized
-        )
-        state = datatypes.update_state_by_log(
-                state_uninitialized, self.config.init_steps
-        )
+        sim_traj_uninitialized = datatypes.fill_invalid_trajectory(state.log_trajectory)
+        state_uninitialized = state.replace(timestep=jnp.array(-1), sim_trajectory=sim_traj_uninitialized)
+        state = datatypes.update_state_by_log(state_uninitialized, self.config.init_steps)
         state = PlanningGoKartSimState(**state)
         if rng is not None:
             # random initial position and velocity
@@ -202,10 +215,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
 
         else:
             keys = [None] * len(self._sim_agent_actors)
-        init_actor_states = [
-            actor_core.init(key, state)
-            for key, actor_core in zip(keys, self._sim_agent_actors)
-        ]
+        init_actor_states = [actor_core.init(key, state) for key, actor_core in zip(keys, self._sim_agent_actors)]
         state = state.replace(sim_agent_actor_states=init_actor_states)
         return state
 
@@ -213,8 +223,9 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         data_spec = self.dynamics.action_spec()  # rank 1
         return data_spec
 
-    def step(self, state: PlanningGoKartSimState, action: datatypes.Action,
-             rng: jax.Array | None = None) -> PlanningGoKartSimState:
+    def step(
+        self, state: PlanningGoKartSimState, action: datatypes.Action, rng: jax.Array | None = None
+    ) -> PlanningGoKartSimState:
         """
         Advances simulation by one timestep using the dynamics model.
 
@@ -273,37 +284,35 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
 
         # shape: (...,2)
         sdc_xy_curr = datatypes.select_by_onehot(
-                pos_xy,
-                state.object_metadata.is_sdc,
-                keepdims=False,
+            pos_xy,
+            state.object_metadata.is_sdc,
+            keepdims=False,
         )
 
         # Shape: (..., num_objects, num_timesteps=1)
         obj_valid_curr = datatypes.dynamic_slice(
-                state.sim_trajectory.valid,
-                state.timestep,
-                1,
-                axis=-1,
+            state.sim_trajectory.valid,
+            state.timestep,
+            1,
+            axis=-1,
         )
         # Shape: (...)
         sdc_valid_curr = datatypes.select_by_onehot(
-                obj_valid_curr[..., 0],
-                state.object_metadata.is_sdc,
-                keepdims=False,
+            obj_valid_curr[..., 0],
+            state.object_metadata.is_sdc,
+            keepdims=False,
         )
         # Distance from the current sdc position to all the points on sdc_paths (here centerline)
         # Shape: (..., num_paths, num_points_per_path) our case: num_paths=1
         dist_raw = jnp.linalg.norm(
-                state.sdc_paths.xy - jnp.expand_dims(sdc_xy_curr, axis=(-2, -3)),
-                axis=-1,
-                keepdims=False,
+            state.sdc_paths.xy - jnp.expand_dims(sdc_xy_curr, axis=(-2, -3)),
+            axis=-1,
+            keepdims=False,
         )
         # Only consider valid on-route paths.
         dist = jnp.where(state.sdc_paths.valid & state.sdc_paths.on_route, dist_raw, jnp.inf)
         # Only consider valid SDC states. # shape: (..., num_paths, num_points_per_path)
-        dist = jnp.where(
-                jnp.expand_dims(sdc_valid_curr, axis=(-1, -2)), dist, jnp.inf
-        )
+        dist = jnp.where(jnp.expand_dims(sdc_valid_curr, axis=(-1, -2)), dist, jnp.inf)
         # index of the nearest point on the reference path
         idx = jnp.argmin(dist, axis=-1, keepdims=True)  # (..., num_paths=1, 1)
 
@@ -319,20 +328,21 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
 
 @jaxtyped(typechecker=typechecker)
 def calculate_distances_to_boundary(
-        car_position: Float[Array, "2"],
-        car_yaw: Float[Array, ""],
-        boundary_points: Float[Array, "N 2"],
-        num_rays: int = 11,
-        max_distance: float = 0.1):
+    car_position: Float[Array, "2"],
+    car_yaw: Float[Array, ""],
+    boundary_points: Float[Array, "N 2"],
+    num_rays: int = 11,
+    max_distance: float = 0.1,
+):
     """
     calculate distances to boundary in different directions
-    
+
     Args:
     car_position: car position (x, y)
     car_yaw: car orientation in radians
     boundary_points: boundary points of the track shape (N, 2)
     num_rays: number of rays to cast
-    
+
     Returns:
     distances: distance to boundary in different directions    shape (num_rays,)
     hit_points: points of intersections of rays and boundary    shape (num_rays, 2)
@@ -341,7 +351,7 @@ def calculate_distances_to_boundary(
     #     jax.debug.print("car_yaw: {}", car_yaw)
 
     # checked_fn = checkify.checkify(check_greater)
-    # jax.debug.breakpoint()    
+    # jax.debug.breakpoint()
     angles = jnp.linspace(-jnp.pi / 2, jnp.pi / 2, num_rays)
     rotated_angles = car_yaw + angles
     ray_directions: Float[Array, "2 nRays"] = jnp.array([jnp.cos(rotated_angles), jnp.sin(rotated_angles)])
@@ -353,9 +363,10 @@ def calculate_distances_to_boundary(
     # error.throw()
     # perpendicular_distances = jnp.sqrt(distances_to_points**2 - projections**2)  # (N, num_rays)
     # TODO reproduce the error, check boundary points
-    boundary2car_dist_repeated: Float[Array, "N nRays"] = jnp.repeat(boundary2car_dist, repeats=num_rays,
-                                                                     axis=1)  # (N, 8)
-    boundary2rays: Float[Array, "N nRays"] = (boundary2car_dist_repeated + 1e-6) ** 2 - projections ** 2
+    boundary2car_dist_repeated: Float[Array, "N nRays"] = jnp.repeat(
+        boundary2car_dist, repeats=num_rays, axis=1
+    )  # (N, 8)
+    boundary2rays: Float[Array, "N nRays"] = (boundary2car_dist_repeated + 1e-6) ** 2 - projections**2
     # tested: min(abs(boundary2car_dist_repeated) - abs(projections)) ~= -9.536e-07 numerical error???
     debug_values1 = jnp.min(abs(boundary2car_dist_repeated) - abs(projections))
     debug_values2 = jnp.min(boundary2rays)
