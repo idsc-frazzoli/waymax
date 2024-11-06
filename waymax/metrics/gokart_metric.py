@@ -198,6 +198,7 @@ class GokartOrientationMetric(abstract_metric.AbstractMetric):
         orientation_reward = jnp.where(orientation_reward > 0, orientation_reward, 0)
         # scaled by the velocity, negative if the car is moving in the opposite direction
         orientation_reward *= sdc_vel_curr[0]  # (...,) vx
+        #az: maybe tanh instead of clipping?
         orientation_reward = jnp.clip(orientation_reward, -1, 1) # 0.05
 
         return MetricResult.create_and_validate(
