@@ -31,8 +31,6 @@ from waymax.agents import actor_core
 from waymax.env import typedefs as types, PlanningAgentEnvironment
 from waymax.utils.geometry import rotation_matrix
 
-from scipy.stats import norm, uniform, gaussian_kde
-
 typechecker = beartype.beartype
 
 
@@ -155,22 +153,6 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
             )
 
         # TODO domain randomization/sampler
-        ndm = True
-        if ndm is True:
-            # Step 0: Initialize random key for JAX and hardcode mu and sigma (TODO: config)
-            key = jax.random.PRNGKey(0)
-            num_samples = sdc_vel_curr.val.shape[0]
-            rand_dim = 2
-            mu = jnp.zeros(shape=sdc_vel_curr.val.shape)
-            sigma = jnp.multiply(jnp.array([0.173, 0.139]), jnp.ones(shape=sdc_vel_curr.val.shape))
-
-            # Step 1: Generate uniform random samples for each state
-            uniform_samples = jax.random.uniform(key, shape=(num_samples, rand_dim), minval=0, maxval=1)
-
-            # Step 2: Use the inverse CDF (percent-point function) for each state
-            normal_samples = norm.ppf(uniform_samples, loc=mu, scale=sigma)
-
-            sdc_vel_curr.val += normal_samples
 
         obs = jnp.concatenate(
             [sdc_vel_curr, sdc_yaw_rate_curr, dir_diff, distance_to_edge], axis=-1
