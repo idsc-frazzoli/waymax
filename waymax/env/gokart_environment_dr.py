@@ -27,10 +27,14 @@ from jax import Array
 from jax.experimental import checkify
 from jaxtyping import Float, jaxtyped
 
+# from gocarx.ppl.az.train import wandb_callback
 from waymax import config as _config, datatypes, dynamics as _dynamics, rewards
 from waymax.agents import actor_core
 from waymax.env import typedefs as types, PlanningAgentEnvironment
 from waymax.utils.geometry import rotation_matrix
+
+import wandb
+
 
 typechecker = beartype.beartype
 
@@ -159,6 +163,7 @@ class GokartRacingDREnvironment(PlanningAgentEnvironment):
         # sdc_xy_curr, jnp.array([sdc_yaw_curr]), , debug_value
         # TODO domain randomization/sampler
         obs_noisy = apply_domain_rando(obs, rng)
+
         return obs_noisy
 
     def reset(self, state: PlanningGoKartSimState, rng: jax.Array | None = None) -> PlanningGoKartSimState:
@@ -404,8 +409,20 @@ def get_future_track(state: PlanningGoKartSimState, car_pos, car_orientation, ne
 
 def apply_domain_rando(obs: Array, rng: Optional[jax.Array] = None) -> Array:
     # Generate Gaussian noise with JAX
-    mu = 0
-    sigma = 0.1
-    noise = jax.random.normal(rng, obs.shape) * sigma + mu
-    noisy_observation = obs + noise
-    return noisy_observation
+    # gaussian properties
+    # mu = 0  # consider centered gaussian: mu = 0
+    sigma_vx = 0.1  # longitudinal vel.
+    sigma_vy = 0.1  # lateral vel.
+    sigma_r = 0.01  # angular vel
+    sigma_states = jnp.array([sigma_vx, sigma_vy, sigma_r])
+
+    # random sampler from jax with normal distribution
+    noise_states = jax.random.normal(rng, sigma_states.shape) * sigma_states
+
+    # copy obs and apply randomization as wished
+    obs_noisy = obs.at[:3].set(obs[:3] + noise_states)
+
+    # TODO: Log the noisy observation and the difference
+    # wandb.log({"obs": obs, "obs_noisy": obs_noisy})
+
+    return obs_noisy
