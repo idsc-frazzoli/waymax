@@ -21,6 +21,8 @@ from waymax.env.errors import SimulationNotInitializedError
 from waymax.env.planning_agent_environment import PlanningAgentDynamics
 from waymax.env.planning_agent_environment import PlanningAgentEnvironment
 from waymax.env.planning_agent_environment import PlanningAgentSimulatorState
+from waymax.env.gokart_environment_dr import GokartRacingDREnvironment
+from waymax.env.gokart_environment_dr import PlanningGoKartSimState
 from waymax.env.gokart_environment import GokartRacingEnvironment
 from waymax.env.gokart_environment import PlanningGoKartSimState
 from waymax.env.rollout import rollout
