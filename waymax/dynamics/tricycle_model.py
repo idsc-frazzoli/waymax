@@ -149,7 +149,7 @@ class TricycleModel(DynamicsModel):
     y = trajectory.y
     vel_x = trajectory.vel_x  
     vel_y = trajectory.vel_y
-    yaw = trajectory.yaw
+    yaw = geometry.wrap_yaws(trajectory.yaw)
     yaw_rate = trajectory.yaw_rate
     # yaw_rate = jnp.zeros_like(vel_x)
     state = jnp.concatenate((x, y, vel_x, vel_y, yaw, yaw_rate), axis=-1)
