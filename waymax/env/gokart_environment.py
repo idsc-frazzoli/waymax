@@ -16,6 +16,7 @@
 
 import dataclasses
 from typing import Sequence
+from typing import Optional
 
 import beartype
 import chex
@@ -76,7 +77,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         specs = BoundedArray((15,), jnp.float32, minimum, maximum)
         return specs
 
-    def observe(self, state: PlanningGoKartSimState) -> types.Observation:
+    def observe(self, state: PlanningGoKartSimState, rng: Optional[jax.Array] = None) -> types.Observation:
         """Computes the observation for the given simulation state.
 
         Here we assume that the default observation is just the simulator state. We
@@ -151,8 +152,6 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
             distance_to_edge, _, _ = jax.vmap(calculate_distances_to_boundary, in_axes=(0, 0, 0))(
                 sdc_xy_curr, sdc_yaw_curr, edge_points
             )
-
-        # TODO domain randomization/sampler
 
         obs = jnp.concatenate(
             [sdc_vel_curr, sdc_yaw_rate_curr, dir_diff, distance_to_edge], axis=-1
