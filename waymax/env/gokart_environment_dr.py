@@ -133,6 +133,8 @@ class GokartRacingDREnvironment(PlanningAgentEnvironment):
         # dir_diff = sdc_yaw_curr - dir_ref  # (...,)
 
         dir_diff = dir_ref - sdc_yaw_curr  # (...,num)
+        dir_diff_unwrapped = jnp.unwrap(dir_diff)
+        dir_diff_wrapped = (dir_diff_unwrapped + jnp.pi) % (2 * jnp.pi) - jnp.pi
         # jax.debug.breakpoint()
         # future_track, _ = get_future_track(state, sdc_xy_curr, sdc_yaw_curr, nearest_index)
 
@@ -158,7 +160,7 @@ class GokartRacingDREnvironment(PlanningAgentEnvironment):
             )
 
         obs = jnp.concatenate(
-            [sdc_vel_curr, sdc_yaw_rate_curr, dir_diff, distance_to_edge], axis=-1
+            [sdc_vel_curr, sdc_yaw_rate_curr, dir_diff_wrapped, distance_to_edge], axis=-1
         )  ## add information of the track? + yaw rate  #future_track.ravel()
         # sdc_xy_curr, jnp.array([sdc_yaw_curr]), , debug_value
         # TODO domain randomization/sampler
