@@ -411,18 +411,21 @@ def apply_domain_rando(obs: Array, rng: Optional[jax.Array] = None) -> Array:
     # Generate Gaussian noise with JAX
     # gaussian properties
     # mu = 0  # consider centered gaussian: mu = 0
-    sigma_vx = 0.1  # longitudinal vel.
-    sigma_vy = 0.1  # lateral vel.
-    sigma_r = 0.01  # angular vel
+    sigma_vx = 0.173  # longitudinal vel.
+    sigma_vy = 0.139  # lateral vel.
+    sigma_r = 0.044  # angular vel
     sigma_states = jnp.array([sigma_vx, sigma_vy, sigma_r])
+
+    sigma_yaw = jnp.array([0.024])  # orientation: applied to obs dir_diff
+    sigma_xy = 0.160 * jnp.ones(shape=(11,))  # position: applied to obs distance_to_edge (11 values)
 
     # random sampler from jax with normal distribution
     noise_states = jax.random.normal(rng, sigma_states.shape) * sigma_states
+    noise_dir_diff = jax.random.normal(rng, sigma_yaw.shape) * sigma_yaw
+    noise_dist_edge = jax.random.normal(rng, sigma_xy.shape) * sigma_xy
+
+    noise_obs = jnp.concatenate([noise_states, noise_dir_diff, noise_dist_edge], axis=0)
 
     # copy obs and apply randomization as wished
-    obs_noisy = obs.at[:3].set(obs[:3] + noise_states)
-
-    # TODO: Log the noisy observation and the difference
-    # wandb.log({"obs": obs, "obs_noisy": obs_noisy})
-
+    obs_noisy = obs + noise_obs
     return obs_noisy
