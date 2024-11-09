@@ -27,14 +27,11 @@ from jax import Array
 from jax.experimental import checkify
 from jaxtyping import Float, jaxtyped
 
-# from gocarx.ppl.az.train import wandb_callback
+# from gocarx.rl.ppo.train import wandb_callback
 from waymax import config as _config, datatypes, dynamics as _dynamics, rewards
 from waymax.agents import actor_core
 from waymax.env import typedefs as types, PlanningAgentEnvironment
 from waymax.utils.geometry import rotation_matrix
-
-import wandb
-
 
 typechecker = beartype.beartype
 
@@ -128,8 +125,8 @@ class GokartRacingDREnvironment(PlanningAgentEnvironment):
             keepdims=False,
         )
 
-        dir_ref, nearest_index = self._get_ref_direction(state)  # (...,num,2)
-        dir_ref = jnp.arctan2(dir_ref[..., 1], dir_ref[..., 0])  # (...,num)
+        dir_ref_vec, nearest_index = self._get_ref_direction(state)  # (...,num,2)
+        dir_ref = jnp.arctan2(dir_ref_vec[..., 1], dir_ref_vec[..., 0])  # (...,num)
         # dir_diff = sdc_yaw_curr - dir_ref  # (...,)
 
         dir_diff = dir_ref - sdc_yaw_curr  # (...,num)
@@ -163,6 +160,11 @@ class GokartRacingDREnvironment(PlanningAgentEnvironment):
             [sdc_vel_curr, sdc_yaw_rate_curr, dir_diff_wrapped, distance_to_edge], axis=-1
         )  ## add information of the track? + yaw rate  #future_track.ravel()
         # sdc_xy_curr, jnp.array([sdc_yaw_curr]), , debug_value
+
+        ## DEBUGGING
+        # print(f"Curr yaw in observe: {sdc_yaw_curr}")
+        # print(f"Curr ref in observe: {dir_ref_vec} at position {sdc_xy_curr}")
+
         # TODO domain randomization/sampler
         obs_noisy = apply_domain_rando(obs, rng)
 
