@@ -38,6 +38,7 @@ DynamicsModel = abstract_dynamics.DynamicsModel
 # This speed limit helps to filter out false positive very large steering value.
 _SPEED_LIMIT = 0.6  # Units: m/s
 
+_G = 9.81
 
 class TricycleModel(DynamicsModel):
   """Dynamics model using acceleration and steering curvature for control."""
@@ -93,23 +94,23 @@ class TricycleModel(DynamicsModel):
           maximum=np.array([1.0, 1.0, 1.0]),
       )
 
-  def _clip_values(self, action_array: jax.Array) -> jax.Array:
+  def _clip_values(self, action_array: jax.Array, opposite_normalize_actions = False) -> jax.Array:
     """Clip action values to be within the allowable ranges."""
     
     steering = jnp.clip(
         action_array[..., 0],
-        self.action_spec().minimum[0],
-        self.action_spec().maximum[0],
+        self.action_spec(opposite_normalize_actions).minimum[0],
+        self.action_spec(opposite_normalize_actions).maximum[0],
     )
     acc_l = jnp.clip(
         action_array[..., 1],
-        self.action_spec().minimum[1],
-        self.action_spec().maximum[1],
+        self.action_spec(opposite_normalize_actions).minimum[1],
+        self.action_spec(opposite_normalize_actions).maximum[1],
     )
     acc_r = jnp.clip(
         action_array[..., 2],
-        self.action_spec().minimum[2],
-        self.action_spec().maximum[2],
+        self.action_spec(opposite_normalize_actions).minimum[2],
+        self.action_spec(opposite_normalize_actions).maximum[2],
     )
     return jnp.stack([steering, acc_l, acc_r], axis=-1)
 
@@ -187,7 +188,114 @@ class TricycleModel(DynamicsModel):
             yaw: yaw angle
             yaw_rate: yaw rate
     '''
+    
+    NEW_DYNAMICS = True
+    
+    if NEW_DYNAMICS:
+      return self._new_dynamics(action, state)
+    else:
+      return self._old_dynamics(action, state)
+    
+  def _new_dynamics(self, action: jax.Array, state: jnp.ndarray,):
+    
+    if self._normalize_actions:
+      action_spec = self.action_spec()
+      action_spec_minimum = jnp.array(action_spec.minimum)
+      action_spec_maximum = jnp.array(action_spec.maximum)
+      raw_action_spec = self.action_spec(self._normalize_actions)
+      raw_action_spec_minimum = jnp.array(raw_action_spec.minimum)
+      raw_action_spec_maximum = jnp.array(raw_action_spec.maximum)
+      
+      # convert normalized action [-1,1] to a real world action (eg acceleration [-6,-6])
+      action = (action - action_spec_minimum) / (action_spec_maximum - action_spec_minimum) * \
+        (raw_action_spec_maximum - raw_action_spec_minimum) + raw_action_spec_minimum
+    
+    action_array = self._clip_values(action, self._normalize_actions)
 
+    # beta, AB_L, AB_R = jnp.split(action_array, 3, axis=-1)
+    beta, AB_L, AB_R = action_array
+    
+    AB = AB_L + AB_R
+    
+    tv = (AB_R - AB_L) / 2
+
+    x, y, v_x, v_y, yaw, vrot_z = state # float shape ()
+    
+    reg = self._get_reg_from_velocity(v_x)
+
+    #region front wheel acc
+    # front wheel angle
+    delta = self._ackermann_mapping(beta, two_wheels=False) # steering angle
+
+    # velocities at front wheel (Marc Heim, (2.43))
+    vel1 = jnp.array([v_x, v_y + self.gk_geometry.l1 * vrot_z])   # go kart frame
+    # Tire Forces (velocity in wheels reference frame)
+    rot_delta = geometry.rotation_matrix(delta)
+
+    # # Front wheel velocity in wheel reference frame (Adaption from Marc Heim (2.82f))
+    v_frontaxle = rot_delta.T @ vel1   # front tyre frame
+    # jax.debug.print("shapes: v_frontaxle = {}", v_frontaxle.shape)
+    # jax.debug.print("v_frontaxle = {}\n", v_frontaxle)
+    # friction coefficient front
+    mu_front = self._mu_y_front(v_frontaxle[1], v_frontaxle[0], reg=reg)
+    
+    # longitudinal load transfer
+    load_transfer = self.gk_geometry.h * AB
+    fz_f = - (_G * self.gk_geometry.l2 - load_transfer) * self.gk_geometry.m / self.gk_geometry.l
+    fz_r = - (_G * self.gk_geometry.l1 + load_transfer) * self.gk_geometry.m / self.gk_geometry.l
+    
+    # Longitudinal and lateral force in kart frame at the front wheel
+    # jax.debug.print("shapes: mu_front = {}, fz_f = {}", mu_front.shape, fz_f.shape)
+    # jax.debug.print("mu_front = {}, fz_f = {}\n", mu_front, fz_f)
+    f_front_wheel = rot_delta @ jnp.array([0.0,  mu_front * fz_f])
+    f_x_front = f_front_wheel[0]
+    f_y_front = f_front_wheel[1]
+    
+    # jax.debug.print("shapes: f_front_wheel = {}", f_front_wheel.shape)
+    # jax.debug.print("f_front_wheel = {}\n", f_front_wheel)
+    
+    # Longitudinal force from both rear wheels (f_x_left+f_x_right)
+    f_x_rear = AB * self.gk_geometry.m
+    
+    # Back Wheel longitudinal and lateral velocities
+    v_x_backaxle_l = v_x - self.gk_geometry.w2 / 2 * vrot_z
+    v_x_backaxle_r = v_x + self.gk_geometry.w2 / 2 * vrot_z
+    v_y_backaxle = v_y - self.gk_geometry.l2 * vrot_z
+    
+    # Lateral force from left rear wheel
+    f_y_left_rear = self._mu_y_rear(v_y_backaxle, v_x_backaxle_l, AB_L / 2, reg=reg) * fz_r / 2
+    # Lateral force from right rear wheel
+    f_y_right_rear = self._mu_y_rear(v_y_backaxle, v_x_backaxle_r, AB_R / 2, reg=reg) * fz_r / 2
+    
+    # jax.debug.print("shapes: f_y_left_rear = {}, f_y_right_rear = {}", f_y_left_rear.shape, f_y_right_rear.shape)
+    # jax.debug.print("f_y_left_rear = {}, f_y_right_rear = {}\n", f_y_left_rear, f_y_right_rear)
+    
+    # Torque vectoring
+    tv_torque = tv * self.gk_geometry.m * self.gk_geometry.w2 / 2
+    
+    # ------ Gokart accelerations
+    # Rotational Acceleration of the kart
+    rotacc_z = (tv_torque + f_y_front * self.gk_geometry.l1 - (f_y_right_rear + f_y_left_rear) * self.gk_geometry.l2) / \
+               (self.model_params.Iz * self.gk_geometry.m)
+    # Longitudinal Acceleration of kart
+    acc_x = (f_x_front + f_x_rear) / self.gk_geometry.m + vrot_z * v_y
+    # Lateral Acceleration of kart
+    acc_y = (f_y_front + f_y_right_rear + f_y_left_rear) / self.gk_geometry.m - vrot_z * v_x
+
+    rot_kart = geometry.rotation_matrix(yaw)
+    gokart_vel = rot_kart @ jnp.array([v_x, v_y])
+  
+    x_dot = gokart_vel[0]
+    y_dot = gokart_vel[1]
+    yaw_dot = vrot_z
+    yaw_rate_dot = rotacc_z
+    vel_x_dot = acc_x
+    vel_y_dot = acc_y
+    # jax.debug.print("shapes: x_dot = {}, y_dot = {}, vel_x_dot = {}, vel_y_dot = {}, yaw_dot = {}, yaw_rate_dot = {}", x_dot.shape, y_dot.shape, vel_x_dot.shape, vel_y_dot.shape, yaw_dot.shape, yaw_rate_dot.shape)
+    # endregion
+    return jnp.array([x_dot, y_dot, vel_x_dot, vel_y_dot, yaw_dot, yaw_rate_dot])  
+  
+  def _old_dynamics(self, action: jax.Array, state: jnp.ndarray,):
     action_array = self._clip_values(action)
 
     # beta, AB_L, AB_R = jnp.split(action_array, 3, axis=-1)
@@ -197,7 +305,7 @@ class TricycleModel(DynamicsModel):
 
     #region front wheel acc
     # front wheel angle
-    delta = self._ackermann_mapping(beta) # steering angle
+    delta = self._ackermann_mapping(beta, two_wheels=False) # steering angle
 
     # velocities at front wheel (Marc Heim, (2.43))
     vel1 = jnp.array([vel_x, vel_y + self.gk_geometry.l1 * yaw_rate])   # go kart frame
@@ -205,11 +313,23 @@ class TricycleModel(DynamicsModel):
 
     # Adaption from Marc Heim (2.82f)
     v1_tyre = delta_rotation.T @ vel1   # front tyre frame
+    jax.debug.print("shapes: v1_tyre = {}", v1_tyre.shape)
+    jax.debug.print("v1_tyre = {}\n", v1_tyre)
     # forces at front wheel, only lateral force, no longitudinal force
     acc_f1y = self._get_front_acc_y(v1_tyre[1], v1_tyre[0])
     delta_rotation_reverse = geometry.rotation_matrix(-delta)
     F1 = delta_rotation_reverse.T @ jnp.array([0.0, acc_f1y]); # Marc Heim (2.82f) front acc in go kart frame
     # endregion
+    
+    jax.debug.print("shapes: acc_f1y = {}", acc_f1y.shape)
+    jax.debug.print("acc_f1y = {}\n", acc_f1y)
+    jax.debug.print("shapes: F1 = {}", F1.shape)
+    jax.debug.print("F1 = {}\n", F1)
+    
+    # FIXME unnormalize inputs?
+    # FIXME F1 should be multiplied by the normal force f^1_z? (2.75)
+    # FIXME For F2l_y and F2r_y, taccx input should be AB_X * 2 instead of AB_X / 2? (2.77)
+    # FIXME F2l_y and F2r_y should be multiplied by the normal force f^2_n? (2.75)
 
     # region calculate back axle acc
     total_acc = AB_L + AB_R
@@ -240,9 +360,12 @@ class TricycleModel(DynamicsModel):
     # rotacc_z = (tv_trq + F1[1] * self.gk_geometry.l1 - F2y * self.gk_geometry.l2) / self.model_params.Iz
     rotacc_z = (tv_trq + F1[1] * self.gk_geometry.l1 - (F2l_y + F2r_y) * self.gk_geometry.l2) / self.model_params.Iz
     # Forward Acceleration of kart Marc Heim (2.86, 2.89), extended
-    acc_x = F1[0] + total_acc + yaw_rate * vel_y
+    acc_x = F1[0] + total_acc #+ yaw_rate * vel_y
     # Lateral Acceleration of kart Marc Heim (2.87, 2.90)
-    acc_y = F1[1] + F2l_y + F2r_y - yaw_rate * vel_x
+    acc_y = F1[1] + F2l_y + F2r_y #- yaw_rate * vel_x
+    
+    # jax.debug.print("acc x = {} + {}", F1[0], total_acc)
+    # jax.debug.print("acc y = {} + {} + {}", F1[1], F2l_y, F2r_y)
 
     rot_kart = geometry.rotation_matrix(yaw)
     lv = jnp.array([vel_x, vel_y])
@@ -260,10 +383,27 @@ class TricycleModel(DynamicsModel):
     # endregion
     return jnp.array([x_dot, y_dot, vel_x_dot, vel_y_dot, yaw_dot, yaw_rate_dot])
 
-  def _ackermann_mapping(self, steering: float) -> float:
+  def _ackermann_mapping(self, steering: float, two_wheels = False) -> float:
     """Maps angle of steerig wheel to the steering angle of front wheel."""
-    return -0.065 * steering * steering * steering + 0.45 * steering
+    if two_wheels:
+      return 0.5 * self._ackermann_mapping_left(steering) + 0.5 * self._ackermann_mapping_right(steering)
+    else:
+      return -0.065 * steering * steering * steering + 0.45 * steering
 
+  def _ackermann_mapping_left(self, steering: float) -> float:
+    """Maps angle of steerig wheel to the steering angle of front left wheel."""
+    return -0.0355 * steering * steering * steering - 0.0455 * steering * steering + 0.36 * steering
+  
+  def _ackermann_mapping_right(self, steering: float) -> float:
+    """Maps angle of steerig wheel to the steering angle of front right wheel."""
+    return -0.0355 * steering * steering * steering + 0.0455 * steering * steering + 0.36 * steering
+
+  def _get_reg_from_velocity(self, vx):
+    vx_thresh = jnp.array([3.0])
+    min_reg, max_reg = 0.1, 3
+    reg_factor = jnp.max(vx_thresh - jnp.abs(vx), 0) / vx_thresh
+    return min_reg + (max_reg - min_reg) * reg_factor
+  
   def _get_front_acc_y(self, v_y: float, v_x: float):
     return self._magic(-v_y / (v_x + self.model_params.REG_), self.paj_params.front_paj)
 
@@ -272,8 +412,26 @@ class TricycleModel(DynamicsModel):
     s = self._simpleslip(v_y, v_x, taccx, self.paj_params.rear_paj.D)
     acc_y = self._magic(s, self.paj_params.rear_paj)
     return self._capfactor(taccx, self.paj_params.rear_paj.D) * acc_y
+  
+  def _mu_y_front(self, v_y, v_x, reg):
+    return self._magic4p(self._sideslip(v_y=v_y, v_x=v_x, reg=reg), self.paj_params.front_paj)
+  
+  def _mu_y_rear(self, v_y, v_x, taccx, reg):
+    mu_y = self._magic4p(self._sideslip(v_y=v_y, v_x=v_x, reg=reg), self.paj_params.rear_paj)
+    return self._capfactor(taccx, self.paj_params.rear_paj.D * _G) * mu_y
 
+  def _sideslip(self, v_y, v_x, reg):
+    return jnp.atan2(v_y, jnp.fabs(v_x) + reg)  # (1 / capfactor(taccx, D2=D2)) *)
 
+  def _magic4p(self, slip, paj_params):
+    return paj_params.D * jnp.sin(
+      paj_params.C * jnp.atan(
+        paj_params.B * slip - paj_params.E * (
+          paj_params.B * slip - paj_params.E * jnp.atan(paj_params.B * slip)
+        )
+      )
+    )[0]
+    
   def _magic(self, slipping_coef, paj_params):
     return paj_params.D * jnp.sin(paj_params.C * jnp.atan(paj_params.B * slipping_coef))
 
