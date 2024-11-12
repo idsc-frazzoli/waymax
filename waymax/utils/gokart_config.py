@@ -7,20 +7,26 @@ from jaxtyping import Float
 
 @dataclass
 class GoKartGeometry:
+    l: float = 1.19  # Distance from front to rear axle (must be equal to l1 + l2)
     l1: float = 0.72  # Distance from cog to front tires
     l2: float = 0.47  # Distance from cog to rear tires
     w1: float = 0.94  # Distance between front Tires
     w2: float = 1.08  # Distance between rear Tires
+    h: float = 0.24   # Height of the cog
     back2backaxle: float = 0.23  # Distance from the rear of the gokart to the back axle
     frontaxle2front: float = 0.33  # Distance from the front axle to the front of the kart
     wheel2border: float = 0.18  # Side distance between center of the wheel and external frame
     F2n: float = l1 / (l1 + l2)  # Normal force at the rear axle "portion of Mass supported by rear tire"
+    m: float = 335  # Mass kg of the gokart
+    
+    def __post_init__(self):
+        assert self.l == self.l1 + self.l2, f"l {self.l} must be equal to l1 {self.l1} + l2 {self.l2}"
 
 
 @dataclass
 class TricycleParams:
     Iz: float = 0.7  # Inertia around the z axis
-    REG_: float = 0.5  # Regularization factor
+    REG_: float = 0.1  # Regularization factor
 
 
 @dataclass
