@@ -62,7 +62,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
                 _config.MetricsConfig(), metrics_to_run=(
                     "gokart_offroad", "gokart_progress", "gokart_orientation"))
         reward_config = _config.LinearCombinationRewardConfig(
-                rewards={'gokart_offroad': 5, 'gokart_progress': 1.0, 'gokart_orientation': 0.05})
+                rewards={'gokart_offroad': -1, 'gokart_progress': 1.0, 'gokart_orientation': 0.05})
         self._reward_function = rewards.LinearCombinationReward(reward_config)
 
     def observation_spec(self) -> BoundedArray:
