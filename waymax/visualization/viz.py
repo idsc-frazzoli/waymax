@@ -249,6 +249,7 @@ def plot_simulator_state(
     batch_idx: int = -1,
     highlight_obj: waymax_config.ObjectType = waymax_config.ObjectType.SDC,
     ref: bool = False,
+    rays_length: np.ndarray | None = None,
 ) -> np.ndarray:
   """Plots np array image for SimulatorState.
 
@@ -302,6 +303,12 @@ def plot_simulator_state(
         ms=1,
         alpha=0.5,
     )
+  if rays_length is not None:
+    position = traj.xy[0, state.timestep, :]
+    yaw = traj.yaw[0, state.timestep]
+    rays_length = rays_length[batch_idx, state.timestep,:]
+    utils.plot_numpy_rays(ax, position, yaw, color=np.array([1.0, 0.65, 0.0]), rays_length=rays_length)
+    pass
 
   # 2. Plots road graph elements.
   plot_roadgraph_points(ax, state.roadgraph_points, verbose=False)

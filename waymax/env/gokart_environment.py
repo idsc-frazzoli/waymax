@@ -29,7 +29,7 @@ from jaxtyping import Float, jaxtyped
 from waymax import config as _config, datatypes, dynamics as _dynamics, rewards
 from waymax.agents import actor_core
 from waymax.env import typedefs as types, PlanningAgentEnvironment
-from waymax.utils.geometry import rotation_matrix
+from waymax.utils.geometry import rotation_matrix, wrap_yaws
 
 typechecker = beartype.beartype
 
@@ -121,10 +121,10 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         )
 
         dir_ref, nearest_index = self._get_ref_direction(state)  # (...,num,2)
-        dir_ref = jnp.arctan2(dir_ref[..., 1], dir_ref[..., 0])  # (...,num)
+        dir_ref = wrap_yaws(jnp.arctan2(dir_ref[..., 1], dir_ref[..., 0]))  # (...,num)
         # dir_diff = sdc_yaw_curr - dir_ref  # (...,)
 
-        dir_diff = dir_ref - sdc_yaw_curr  # (...,num)
+        dir_diff = wrap_yaws(dir_ref - sdc_yaw_curr)  # (...,num)
         # jax.debug.breakpoint()
         # future_track, _ = get_future_track(state, sdc_xy_curr, sdc_yaw_curr, nearest_index)
 
