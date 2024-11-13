@@ -4,6 +4,7 @@ from jax import numpy as jnp
 from waymax import datatypes
 from waymax.metrics import abstract_metric, MetricResult
 from waymax.metrics.roadgraph import OffroadMetric
+from waymax.utils.geometry import wrap_yaws
 
 
 class GokartProgressMetric(abstract_metric.AbstractMetric):
@@ -157,22 +158,21 @@ class GokartOrientationMetric(abstract_metric.AbstractMetric):
                 keepdims=False,
         )
 
-        # Shape: (..., num_paths, num_points_per_path)
+        # Shape: (..., num_paths=1, num_points_per_path)
         dist2centerline = jnp.linalg.norm(
                 centerline.xy - jnp.expand_dims(sdc_xy_curr, axis=(-2, -3)),
                 axis=-1,
                 keepdims=False,
         )
 
-        # (..., num_paths, 1) find the nearest point to the car on each path
-        dist_path = jnp.min(dist2centerline, axis=-1, keepdims=True)
-        # (..., 1, 1) find the index of the nearest path
-        idx = jnp.argmin(dist_path, axis=-2, keepdims=True)
+        # (..., num_paths=1, 1) find the index of the nearest point on the centerline
+        idx = jnp.argmin(dist2centerline, axis=-1, keepdims=True)
 
         # (..., num_paths=1, 1, 2) find the direction of the centerline at the nearest point
-        dir_ref = jnp.take_along_axis(state.sdc_paths.dir_xy, idx[..., None], axis=-2)  
+        dir_ref = jnp.take_along_axis(state.sdc_paths.dir_xy, idx[..., None], axis=-2)
         dir_ref = jnp.squeeze(dir_ref, axis=(-2, -3))  # (...,2)
 
+        yaw_ref = wrap_yaws(jnp.arctan2(dir_ref[..., 1], dir_ref[..., 0]))  # (...,)
 
         # shape: (..., num_objects, timesteps=1, 2) -> (..., num_objects, 2)
         vel_xy = state.current_sim_trajectory.vel_xy[..., 0, :]
@@ -192,17 +192,20 @@ class GokartOrientationMetric(abstract_metric.AbstractMetric):
                 state.object_metadata.is_sdc,
                 keepdims=False,
         )
-        yaw_vector = jnp.array([jnp.cos(sdc_yaw_curr), jnp.sin(sdc_yaw_curr)])  # (..., 2)
+        # yaw_vector = jnp.array([jnp.cos(sdc_yaw_curr), jnp.sin(sdc_yaw_curr)])  # (..., 2)
+        dir_diff = jnp.abs(wrap_yaws(yaw_ref - sdc_yaw_curr))  # (...,)
         # encourage the car to move in the direction of the reference track(centerline)
-        orientation_reward = jnp.dot(yaw_vector, dir_ref)  # (...,)
-        orientation_reward = jnp.where(orientation_reward > 0, orientation_reward, 0)
+        # orientation_reward = jnp.dot(yaw_vector, dir_ref)  # (...,)
+        # orientation_reward = jnp.where(orientation_reward > 0, orientation_reward, 0)
+        orientation_reward = jnp.exp(-dir_diff ** 2 / 0.5)
         # scaled by the velocity, negative if the car is moving in the opposite direction
-        orientation_reward *= sdc_vel_curr[0]  # (...,) vx
+        orientation_reward *= jnp.tanh(sdc_vel_curr[0])  # (...,) vx
+        #az: maybe tanh instead of clipping?
         orientation_reward = jnp.clip(orientation_reward, -1, 1) # 0.05
 
         return MetricResult.create_and_validate(
                 value=orientation_reward,
-                valid=jnp.ones(orientation_reward.shape, dtype=bool)
+                valid=jnp.ones(orientation_reward.shape, dtype=jnp.bool)
         )
     
 class GokartOffroadMetric(OffroadMetric):
