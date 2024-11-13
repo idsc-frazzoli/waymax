@@ -199,14 +199,16 @@ class GokartOrientationMetric(abstract_metric.AbstractMetric):
         )
         # yaw_vector = jnp.array([jnp.cos(sdc_yaw_curr), jnp.sin(sdc_yaw_curr)])  # (..., 2)
         dir_diff = jnp.abs(wrap_yaws(yaw_ref - sdc_yaw_curr))  # (...,)
+        
+        ## DEBUGGING
+        # print(f"Curr dirr_diff in metric: {dir_diff} at position {sdc_xy_curr}")
+        
         # encourage the car to move in the direction of the reference track(centerline)
-        # orientation_reward = jnp.dot(yaw_vector, dir_ref)  # (...,)
-        # orientation_reward = jnp.where(orientation_reward > 0, orientation_reward, 0)
         orientation_reward = jnp.exp(-dir_diff ** 2 / 0.5)
-        # scaled by the velocity, negative if the car is moving in the opposite direction
-        orientation_reward *= sdc_vel_curr[0]  # (...,) vx
+        # Only if the longitudinal velocity is non-zero
+        orientation_reward = jnp.tanh(sdc_vel_curr[0]) * orientation_reward
         # az: maybe tanh instead of clipping?
-        orientation_reward = jnp.clip(orientation_reward, -1, 1)  # 0.05
+        orientation_reward = jnp.clip(orientation_reward, -1, 1)
 
         return MetricResult.create_and_validate(
                 value=orientation_reward,

@@ -32,6 +32,7 @@ from waymax import config as _config, datatypes, dynamics as _dynamics, rewards
 from waymax.agents import actor_core
 from waymax.env import typedefs as types, PlanningAgentEnvironment
 from waymax.utils.geometry import rotation_matrix, wrap_yaws
+from waymax.datatypes.observation import Observation, ObjectPose2D
 
 typechecker = beartype.beartype
 
@@ -65,7 +66,7 @@ class GokartRacingDREnvironment(PlanningAgentEnvironment):
             _config.MetricsConfig(), metrics_to_run=("gokart_offroad", "gokart_progress", "gokart_orientation")
         )
         reward_config = _config.LinearCombinationRewardConfig(
-            rewards={"gokart_offroad": 5, "gokart_progress": 1.0, "gokart_orientation": 0.05}
+            rewards={"gokart_offroad": -5, "gokart_progress": 1.0, "gokart_orientation": 0.05}
         )
         self._reward_function = rewards.LinearCombinationReward(reward_config)
         
@@ -169,6 +170,7 @@ class GokartRacingDREnvironment(PlanningAgentEnvironment):
         ## DEBUGGING
         # print(f"Curr yaw in observe: {sdc_yaw_curr}")
         # print(f"Curr ref in observe: {dir_ref_vec} at position {sdc_xy_curr}")
+        # print(f"Curr dirr_diff in observe: {dir_diff} at position {sdc_xy_curr}")
 
         return obs
     

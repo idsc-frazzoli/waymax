@@ -31,6 +31,7 @@ from waymax import config as _config, datatypes, dynamics as _dynamics, rewards
 from waymax.agents import actor_core
 from waymax.env import typedefs as types, PlanningAgentEnvironment
 from waymax.utils.geometry import rotation_matrix, wrap_yaws
+from waymax.datatypes.observation import Observation, ObjectPose2D
 
 typechecker = beartype.beartype
 
