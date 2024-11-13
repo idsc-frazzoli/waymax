@@ -172,19 +172,7 @@ class GokartOrientationMetric(abstract_metric.AbstractMetric):
 
         # (..., num_paths=1, 1) find the index of the nearest point on the centerline
         idx = jnp.argmin(dist2centerline, axis=-1, keepdims=True)
-
-        def get_arclength_for_pts(xy: jax.Array, path: datatypes.Paths):
-            # Shape: (..., max(num_points_per_path))
-            dist_raw = jnp.linalg.norm(
-                    xy[..., jnp.newaxis, :] - path.xy, axis=-1, keepdims=False
-            )
-            dist = jnp.where(path.valid, dist_raw, jnp.inf)
-            idx = jnp.argmin(dist, axis=-1, keepdims=True)
-            # (..., )
-            return jnp.take_along_axis(path.arc_length, indices=idx, axis=-1)[..., 0], idx
-
-        curr_dist, curr_idx = get_arclength_for_pts(sdc_xy_curr, ref_path)
-
+        
         # (..., num_paths=1, 1, 2) find the direction of the centerline at the nearest point
         dir_ref = jnp.take_along_axis(state.sdc_paths.dir_xy, idx[..., None], axis=-2)
         dir_ref = jnp.squeeze(dir_ref, axis=(-2, -3))  # (...,2)

@@ -31,7 +31,7 @@ from jaxtyping import Float, jaxtyped
 from waymax import config as _config, datatypes, dynamics as _dynamics, rewards
 from waymax.agents import actor_core
 from waymax.env import typedefs as types, PlanningAgentEnvironment
-from waymax.utils.geometry import rotation_matrix
+from waymax.utils.geometry import rotation_matrix, wrap_yaws
 
 typechecker = beartype.beartype
 
@@ -126,12 +126,10 @@ class GokartRacingDREnvironment(PlanningAgentEnvironment):
         )
 
         dir_ref_vec, nearest_index = self._get_ref_direction(state)  # (...,num,2)
-        dir_ref = jnp.arctan2(dir_ref_vec[..., 1], dir_ref_vec[..., 0])  # (...,num)
+        dir_ref = wrap_yaws(jnp.arctan2(dir_ref_vec[..., 1], dir_ref_vec[..., 0]))  # (...,num)
         # dir_diff = sdc_yaw_curr - dir_ref  # (...,)
 
-        dir_diff = dir_ref - sdc_yaw_curr  # (...,num)
-        dir_diff_unwrapped = jnp.unwrap(dir_diff)
-        dir_diff_wrapped = (dir_diff_unwrapped + jnp.pi) % (2 * jnp.pi) - jnp.pi
+        dir_diff = wrap_yaws(dir_ref - sdc_yaw_curr)  # (...,num)
         # jax.debug.breakpoint()
         # future_track, _ = get_future_track(state, sdc_xy_curr, sdc_yaw_curr, nearest_index)
 
@@ -157,7 +155,7 @@ class GokartRacingDREnvironment(PlanningAgentEnvironment):
             )
 
         obs = jnp.concatenate(
-            [sdc_vel_curr, sdc_yaw_rate_curr, dir_diff_wrapped, distance_to_edge], axis=-1
+            [sdc_vel_curr, sdc_yaw_rate_curr, dir_diff, distance_to_edge], axis=-1
         )  ## add information of the track? + yaw rate  #future_track.ravel()
         # sdc_xy_curr, jnp.array([sdc_yaw_curr]), , debug_value
 
