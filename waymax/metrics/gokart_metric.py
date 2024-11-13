@@ -4,10 +4,11 @@ from jax import numpy as jnp
 from waymax import datatypes
 from waymax.metrics import abstract_metric, MetricResult
 from waymax.metrics.roadgraph import OffroadMetric
+from waymax.utils.geometry import wrap_yaws
 
 
 class GokartProgressMetric(abstract_metric.AbstractMetric):
-    
+
     @jax.named_scope('GokartProgressMetric.compute')
     def compute(self, state: datatypes.GoKartSimState) -> MetricResult:
         """
@@ -67,7 +68,6 @@ class GokartProgressMetric(abstract_metric.AbstractMetric):
         # (...) find the minimum distance to the nearest path
         min_dist_path = jnp.min(dist2centerline, axis=(-1, -2))
 
-
         # Shape: (..., max(num_points_per_path))
         ref_path = jax.tree_util.tree_map(
                 lambda x: jnp.take_along_axis(x, indices=idx, axis=-2)[..., 0, :],
@@ -88,7 +88,7 @@ class GokartProgressMetric(abstract_metric.AbstractMetric):
         curr_dist, curr_idx = get_arclength_for_pts(sdc_xy_curr, ref_path)
 
         # (..., num_paths=1, 1, 2) find the direction of the centerline at the nearest point
-        dir_ref = jnp.take_along_axis(state.sdc_paths.dir_xy.squeeze(-3), curr_idx[..., None], axis=-2)  
+        dir_ref = jnp.take_along_axis(state.sdc_paths.dir_xy.squeeze(-3), curr_idx[..., None], axis=-2)
         dir_ref = jnp.squeeze(dir_ref, axis=-2)  # (...,2)
         # Normalized one by waymo
         # progress = jnp.where(
@@ -103,23 +103,24 @@ class GokartProgressMetric(abstract_metric.AbstractMetric):
         # movement vector between the last and current position of sdc
         movement_vector = sdc_xy_curr - sdc_xy_last
         movement_vector /= jnp.linalg.norm(movement_vector)
-        # no reward if the movement is not "aligned" with the track tangent
+        # Decreased reward if the movement is not "aligned" with the track tangent
+        alignment = jnp.dot(movement_vector, dir_ref)
         progress = jnp.where(
-                jnp.dot(movement_vector, dir_ref) > 0.7,  # ~= cos45 around 45 degree
+                alignment > 0.7,  # ~= cos45 around 45 degree
                 progress,
                 0)
         path_length = state.sdc_paths.arc_length[..., 0, -1]
 
-        # check if the car has reached the end of the path (i.e., it has compleated a lap)
+        # check if the car has reached the end of the path (i.e., it has completed a lap)
         # (in this case, the progress is negative, so we need to add the path length)
         # a small progress 0.1 between the last point and the first point of the path
         progress = jnp.where(progress < -path_length / 2, path_length + progress + 0.1, progress)
-        
+
         progress = jnp.where(state.timestep <= 0, jnp.zeros(state.sim_trajectory.x.shape[:-2]), progress)
         # print(f"progress: {progress}")
         return MetricResult.create_and_validate(
-                value = progress,
-                valid = jnp.ones(progress.shape, dtype=bool))
+                value=progress,
+                valid=jnp.ones(progress.shape, dtype=bool))
 
 
 class GokartOrientationMetric(abstract_metric.AbstractMetric):
@@ -157,22 +158,21 @@ class GokartOrientationMetric(abstract_metric.AbstractMetric):
                 keepdims=False,
         )
 
-        # Shape: (..., num_paths, num_points_per_path)
+        # Shape: (..., num_paths=1, num_points_per_path)
         dist2centerline = jnp.linalg.norm(
                 centerline.xy - jnp.expand_dims(sdc_xy_curr, axis=(-2, -3)),
                 axis=-1,
                 keepdims=False,
         )
 
-        # (..., num_paths, 1) find the nearest point to the car on each path
-        dist_path = jnp.min(dist2centerline, axis=-1, keepdims=True)
-        # (..., 1, 1) find the index of the nearest path
-        idx = jnp.argmin(dist_path, axis=-2, keepdims=True)
+        # (..., num_paths=1, 1) find the index of the nearest point on the centerline
+        idx = jnp.argmin(dist2centerline, axis=-1, keepdims=True)
 
         # (..., num_paths=1, 1, 2) find the direction of the centerline at the nearest point
-        dir_ref = jnp.take_along_axis(state.sdc_paths.dir_xy, idx[..., None], axis=-2)  
+        dir_ref = jnp.take_along_axis(state.sdc_paths.dir_xy, idx[..., None], axis=-2)
         dir_ref = jnp.squeeze(dir_ref, axis=(-2, -3))  # (...,2)
 
+        yaw_ref = wrap_yaws(jnp.arctan2(dir_ref[..., 1], dir_ref[..., 0]))  # (...,)
 
         # shape: (..., num_objects, timesteps=1, 2) -> (..., num_objects, 2)
         vel_xy = state.current_sim_trajectory.vel_xy[..., 0, :]
@@ -192,30 +192,27 @@ class GokartOrientationMetric(abstract_metric.AbstractMetric):
                 state.object_metadata.is_sdc,
                 keepdims=False,
         )
-        yaw_vector = jnp.array([jnp.cos(sdc_yaw_curr), jnp.sin(sdc_yaw_curr)])  # (..., 2)
+        # yaw_vector = jnp.array([jnp.cos(sdc_yaw_curr), jnp.sin(sdc_yaw_curr)])  # (..., 2)
+        dir_diff = jnp.abs(wrap_yaws(yaw_ref - sdc_yaw_curr))  # (...,)
         # encourage the car to move in the direction of the reference track(centerline)
-        orientation_reward = jnp.dot(yaw_vector, dir_ref)  # (...,)
-        orientation_reward = jnp.where(orientation_reward > 0, orientation_reward, 0)
+        # orientation_reward = jnp.dot(yaw_vector, dir_ref)  # (...,)
+        # orientation_reward = jnp.where(orientation_reward > 0, orientation_reward, 0)
+        orientation_reward = jnp.exp(-dir_diff ** 2 / 0.5)
         # scaled by the velocity, negative if the car is moving in the opposite direction
         orientation_reward *= sdc_vel_curr[0]  # (...,) vx
-        #az: maybe tanh instead of clipping?
-        orientation_reward = jnp.clip(orientation_reward, -1, 1) # 0.05
+        # az: maybe tanh instead of clipping?
+        orientation_reward = jnp.clip(orientation_reward, -1, 1)  # 0.05
 
         return MetricResult.create_and_validate(
                 value=orientation_reward,
-                valid=jnp.ones(orientation_reward.shape, dtype=bool)
+                valid=jnp.ones(orientation_reward.shape, dtype=jnp.bool)
         )
-    
+
+
 class GokartOffroadMetric(OffroadMetric):
-    
+
     @jax.named_scope('GokartOffroadMetric.compute')
     def compute(self, state: datatypes.GoKartSimState) -> MetricResult:
+        """Same as the OffroadMetric but with float32 dtype."""
         is_offroad = super().compute(state)
-        # value = 1 if offroad
-        is_offroad = is_offroad.value.astype(jnp.bool)
-        # get a negative reward if the car is offroad
-        offroad_reward = jnp.where(is_offroad, -1.0, 0)
-        return MetricResult.create_and_validate(
-                value=offroad_reward,
-                valid=jnp.ones_like(offroad_reward, dtype=bool)
-        )
+        return is_offroad.replace(value=is_offroad.value.astype(jnp.float32))
