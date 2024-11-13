@@ -215,4 +215,9 @@ class GokartOffroadMetric(OffroadMetric):
     def compute(self, state: datatypes.GoKartSimState) -> MetricResult:
         """Same as the OffroadMetric but with float32 dtype."""
         is_offroad = super().compute(state)
-        return is_offroad.replace(value=is_offroad.value.astype(jnp.float32))
+        # fixme remove player dimension (to be coherent with all the other gokart metrics,
+        #  but not ideal for multiagent envs)
+        return is_offroad.replace(
+                value=jnp.squeeze(is_offroad.value, axis=-1),
+                valid=jnp.squeeze(is_offroad.valid, axis=-1)
+        )
