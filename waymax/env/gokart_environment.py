@@ -77,7 +77,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         specs = BoundedArray((15,), jnp.float32, minimum, maximum)
         return specs
 
-    def observe(self, state: PlanningGoKartSimState, rng: Optional[jax.Array] = None) -> types.Observation:
+    def observe(self, state: PlanningGoKartSimState) -> types.Observation:
         """Computes the observation for the given simulation state.
 
         Here we assume that the default observation is just the simulator state. We

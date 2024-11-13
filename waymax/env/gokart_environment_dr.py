@@ -68,6 +68,14 @@ class GokartRacingDREnvironment(PlanningAgentEnvironment):
             rewards={"gokart_offroad": 5, "gokart_progress": 1.0, "gokart_orientation": 0.05}
         )
         self._reward_function = rewards.LinearCombinationReward(reward_config)
+        
+        # domain rando config
+        self.sigma_vx = 0.173  # longitudinal vel.
+        self.sigma_vy = 0.139  # lateral vel.
+        self.sigma_r = 0.044  # angular vel
+        self.sigma_yaw = 0.024  # orientation
+        self.sigma_xy = 0.160  # position
+        
 
     def observation_spec(self) -> BoundedArray:
         # todo add observation information (should not be from ppo config)
@@ -78,7 +86,7 @@ class GokartRacingDREnvironment(PlanningAgentEnvironment):
         specs = BoundedArray((15,), jnp.float32, minimum, maximum)
         return specs
 
-    def observe(self, state: PlanningGoKartSimState, rng: Optional[jax.Array] = None) -> types.Observation:
+    def observe(self, state: PlanningGoKartSimState) -> types.Observation:
         """Computes the observation for the given simulation state.
 
         Here we assume that the default observation is just the simulator state. We
@@ -157,15 +165,30 @@ class GokartRacingDREnvironment(PlanningAgentEnvironment):
         obs = jnp.concatenate(
             [sdc_vel_curr, sdc_yaw_rate_curr, dir_diff, distance_to_edge], axis=-1
         )  ## add information of the track? + yaw rate  #future_track.ravel()
-        # sdc_xy_curr, jnp.array([sdc_yaw_curr]), , debug_value
 
         ## DEBUGGING
         # print(f"Curr yaw in observe: {sdc_yaw_curr}")
         # print(f"Curr ref in observe: {dir_ref_vec} at position {sdc_xy_curr}")
 
-        # TODO domain randomization/sampler
-        obs_noisy = apply_domain_rando(obs, rng)
+        return obs
+    
+    def apply_domain_rando(self, obs: jax.Array, rng: jax.Array) -> Array:
+        # Generate Gaussian noise with JAX
+        # gaussian properties: consider centered gaussian: mu = 0
+        sigma_states = jnp.array([self.sigma_vx, self.sigma_vy, self.sigma_r])
 
+        sigma_yaw = jnp.array([self.sigma_yaw])  # orientation: applied to obs dir_diff
+        sigma_xy = self.sigma_xy * jnp.ones(shape=(11,))  # position: applied to obs distance_to_edge (11 values)
+
+        # random sampler from jax with normal distribution
+        noise_states = jax.random.normal(rng, sigma_states.shape) * sigma_states
+        noise_dir_diff = jax.random.normal(rng, sigma_yaw.shape) * sigma_yaw
+        noise_dist_edge = jax.random.normal(rng, sigma_xy.shape) * sigma_xy
+
+        noise_obs = jnp.concatenate([noise_states, noise_dir_diff, noise_dist_edge], axis=0)
+
+        # copy obs and apply randomization as wished
+        obs_noisy = obs + noise_obs
         return obs_noisy
 
     def reset(self, state: PlanningGoKartSimState, rng: jax.Array | None = None) -> PlanningGoKartSimState:
@@ -409,25 +432,3 @@ def get_future_track(state: PlanningGoKartSimState, car_pos, car_orientation, ne
     return relative_track_local, track_points
 
 
-def apply_domain_rando(obs: Array, rng: Optional[jax.Array] = None) -> Array:
-    # Generate Gaussian noise with JAX
-    # gaussian properties
-    # mu = 0  # consider centered gaussian: mu = 0
-    sigma_vx = 0.173  # longitudinal vel.
-    sigma_vy = 0.139  # lateral vel.
-    sigma_r = 0.044  # angular vel
-    sigma_states = jnp.array([sigma_vx, sigma_vy, sigma_r])
-
-    sigma_yaw = jnp.array([0.024])  # orientation: applied to obs dir_diff
-    sigma_xy = 0.160 * jnp.ones(shape=(11,))  # position: applied to obs distance_to_edge (11 values)
-
-    # random sampler from jax with normal distribution
-    noise_states = jax.random.normal(rng, sigma_states.shape) * sigma_states
-    noise_dir_diff = jax.random.normal(rng, sigma_yaw.shape) * sigma_yaw
-    noise_dist_edge = jax.random.normal(rng, sigma_xy.shape) * sigma_xy
-
-    noise_obs = jnp.concatenate([noise_states, noise_dir_diff, noise_dist_edge], axis=0)
-
-    # copy obs and apply randomization as wished
-    obs_noisy = obs + noise_obs
-    return obs_noisy
