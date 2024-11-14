@@ -104,6 +104,7 @@ class GokartProgressMetric(abstract_metric.AbstractMetric):
         movement_vector = sdc_xy_curr - sdc_xy_last
         movement_vector /= jnp.linalg.norm(movement_vector)
         # Decreased reward if the movement is not "aligned" with the track tangent
+        # In particular to avoid crossing the finish line backwards and getting a high reward
         alignment = jnp.dot(movement_vector, dir_ref)
         progress = jnp.where(
                 alignment > 0.7,  # ~= cos45 around 45 degree
