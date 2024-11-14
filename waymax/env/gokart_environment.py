@@ -14,7 +14,6 @@
 
 """Gokart environment for tasks relating to Planning for the ADV."""
 
-import dataclasses
 from typing import Sequence
 
 import beartype
@@ -26,25 +25,13 @@ from jax import Array
 from jax.experimental import checkify
 from jaxtyping import Float, jaxtyped
 
-from waymax import config as _config, datatypes, dynamics as _dynamics, rewards
+from waymax import config as _config, datatypes, dynamics as _dynamics
 from waymax.agents import actor_core
 from waymax.env import typedefs as types, PlanningAgentEnvironment
+from waymax.env.planning_agent_environment import PlanningGoKartSimState
 from waymax.utils.geometry import rotation_matrix, wrap_yaws
 
 typechecker = beartype.beartype
-
-
-@chex.dataclass
-class PlanningGoKartSimState(datatypes.GoKartSimState):
-    """Simulator state for the planning agent environment.
-
-    Attributes:
-      sim_agent_actor_states: State of the sim agents that are being run inside of
-        the environment `step` function. If sim agents state is provided, this
-        will be updated. The list of sim agent states should be as long as and in
-        the same order as the number of sim agents run in the environment.
-    """
-    sim_agent_actor_states: Sequence[actor_core.ActorState] = ()
 
 
 class GokartRacingEnvironment(PlanningAgentEnvironment):
@@ -58,12 +45,12 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
     ) -> None:
         super().__init__(dynamics_model, config, sim_agent_actors, sim_agent_params)
         self._state_dynamics = _dynamics.GoKartStateDynamics()
-        self.metrics_config = dataclasses.replace(
-                _config.MetricsConfig(), metrics_to_run=(
-                    "gokart_offroad", "gokart_progress", "gokart_orientation"))
-        reward_config = _config.LinearCombinationRewardConfig(
-                rewards={'gokart_offroad': -1, 'gokart_progress': 1.0, 'gokart_orientation': 0.05})
-        self._reward_function = rewards.LinearCombinationReward(reward_config)
+        # self.metrics_config = dataclasses.replace(
+        #         _config.MetricsConfig(), metrics_to_run=(
+        #             "gokart_offroad", "gokart_progress", "gokart_orientation"))
+        # reward_config = _config.LinearCombinationRewardConfig(
+        #         rewards={'gokart_offroad': -1, 'gokart_progress': 1.0, 'gokart_orientation': 0.05})
+        # self._reward_function = rewards.LinearCombinationReward(reward_config)
 
     def observation_spec(self) -> BoundedArray:
         # todo add observation information (should not be from ppo config)
@@ -77,13 +64,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
     def observe(self, state: PlanningGoKartSimState) -> types.Observation:
         """Computes the observation for the given simulation state.
 
-        Here we assume that the default observation is just the simulator state. We
-        leave this for the user to override in order to provide a user-specific
-        observation function. A user can use this to move some of their model
-        specific post-processing into the environment rollout in the actor nodes. If
-        they want this post-processing on the accelerator, they can keep this the
-        same and implement it on the learner side. We provide some helper functions
-        at datatypes.observation.py to help write your own observation functions.
+        #todo
 
         Args:
           state: Current state of the simulator of shape (...).
@@ -228,20 +209,6 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         """
         new_state: PlanningGoKartSimState = super().step(state, action, rng)
         return new_state
-
-    #     # compute reward, currently only progression reward is implemented
-    #     # last_state = copy.deepcopy(state)
-    #
-    #
-    #     # dir_ref, _ = self.get_ref_direction(state)
-    #     obs = self.observe(state)
-    #     done = self.check_termination(state)
-    #     # reward, reward_dict = self.compute_reward(last_state, state, dir_ref, done)
-    #     reward, reward_dict = self.compute_reward(state, action)
-    #     obs, state = self.post_step(state, obs, done, rng)
-    #     # done = False # for testing
-    #     info = reward_dict
-    #     return jax.lax.stop_gradient(obs), jax.lax.stop_gradient(state), reward, done, info
 
     def termination(self, state: PlanningGoKartSimState) -> jax.Array:
         """reset the environment if the self-driving car is off-road or the episode is done

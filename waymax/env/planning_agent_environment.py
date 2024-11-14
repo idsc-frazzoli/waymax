@@ -14,7 +14,7 @@
 
 """Waymax environment for tasks relating to Planning for the ADV."""
 
-from typing import Sequence
+from typing import Sequence, Union
 
 import chex
 from dm_env import specs
@@ -158,6 +158,20 @@ class PlanningAgentSimulatorState(datatypes.SimulatorState):
 
   sim_agent_actor_states: Sequence[actor_core.ActorState] = ()
 
+@chex.dataclass
+class PlanningGoKartSimState(datatypes.GoKartSimState):
+    """Simulator state for the planning agent environment.
+
+    Attributes:
+      sim_agent_actor_states: State of the sim agents that are being run inside of
+        the environment `step` function. If sim agents state is provided, this
+        will be updated. The list of sim agent states should be as long as and in
+        the same order as the number of sim agents run in the environment.
+    """
+    sim_agent_actor_states: Sequence[actor_core.ActorState] = ()
+
+PlanningSimState = Union[PlanningAgentSimulatorState, PlanningGoKartSimState]
+
 
 class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
   """An environment wrapper allowing for controlling a single agent.
@@ -272,7 +286,7 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
     return state
 
   @jax.named_scope('PlanningAgentEnvironment.metrics')
-  def metrics(self, state: PlanningAgentSimulatorState) -> types.Metrics:
+  def metrics(self, state: PlanningSimState) -> types.Metrics:
     """Computes the metrics for the single agent wrapper.
 
     The metrics to be computed are based on those specified by the configuration
@@ -293,7 +307,7 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
     # The following metrics need to be selected by one hot. For each, we look
     # if they're in the metric_dict, and if so, we select by onehot and replace
     # the metric in the original metric dictionary.
-    multi_agent_metrics_names = ('log_divergence', 'overlap', 'offroad', 'gokart_offroad')
+    multi_agent_metrics_names = ('log_divergence', 'overlap', 'offroad')
     for metric_name in multi_agent_metrics_names:
       if metric_name in metric_dict:
         one_metric_dict = {metric_name: metric_dict[metric_name]}
@@ -322,7 +336,7 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
 
   @jax.named_scope('PlanningAgentEnvironment.reward')
   def reward(
-      self, state: PlanningAgentSimulatorState, action: datatypes.Action
+      self, state: PlanningSimState, action: datatypes.Action
   ) -> jax.Array:
     """Computes the reward for a transition.
 
@@ -359,10 +373,10 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
   @jax.named_scope('PlanningAgentEnvironment.step')
   def step(
       self,
-      state: PlanningAgentSimulatorState,
+      state: PlanningSimState,
       action: datatypes.Action,
       rng: jax.Array | None = None,
-  ) -> PlanningAgentSimulatorState:
+  ) -> PlanningSimState:
     """Advances simulation by one timestep using the dynamics model.
 
     Args:
