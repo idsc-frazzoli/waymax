@@ -293,7 +293,7 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
     # The following metrics need to be selected by one hot. For each, we look
     # if they're in the metric_dict, and if so, we select by onehot and replace
     # the metric in the original metric dictionary.
-    multi_agent_metrics_names = ('log_divergence', 'overlap', 'offroad')
+    multi_agent_metrics_names = ('log_divergence', 'overlap', 'offroad', 'gokart_offroad')
     for metric_name in multi_agent_metrics_names:
       if metric_name in metric_dict:
         one_metric_dict = {metric_name: metric_dict[metric_name]}
