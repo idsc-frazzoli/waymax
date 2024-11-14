@@ -168,7 +168,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
             keys = jax.random.split(rng, len(self._sim_agent_actors))
             rng_p, rng_v = jax.random.split(rng)
             num_init_points = state.sdc_paths.num_points_per_path
-            valid_index = jnp.arange(0, 2000, 400)
+            valid_index = jnp.arange(0, 2000, 200)
             # init_index = jax.random.randint(rng, (), 0, num_init_points)
             # init_index = jax.random.randint(rng_p, (), 0, num_init_points)
             init_index = jax.random.choice(rng, valid_index)
