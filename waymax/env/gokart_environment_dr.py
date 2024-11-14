@@ -179,7 +179,6 @@ class GokartRacingDREnvironment(PlanningAgentEnvironment):
         Gaussian properties: consider centered gaussian, i.e. mu = 0, and some sigma defined in
         environment object.
         """
-        old_obs = obs
         sigma_dist = self.sigma_xy * jnp.ones(shape=(11,))
         
         obs.vel_x += jax.random.normal(rng, shape=(1,)) * self.sigma_vx
