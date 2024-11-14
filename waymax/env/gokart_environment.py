@@ -31,7 +31,7 @@ from waymax import config as _config, datatypes, dynamics as _dynamics, rewards
 from waymax.agents import actor_core
 from waymax.env import typedefs as types, PlanningAgentEnvironment
 from waymax.utils.geometry import rotation_matrix, wrap_yaws
-from waymax.datatypes.observation import Observation, ObjectPose2D
+from waymax.datatypes.gokart_obs import GokartObservation
 
 typechecker = beartype.beartype
 
@@ -78,7 +78,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         specs = BoundedArray((15,), jnp.float32, minimum, maximum)
         return specs
 
-    def observe(self, state: PlanningGoKartSimState) -> types.Observation:
+    def observe(self, state: PlanningGoKartSimState) -> GokartObservation:
         """Computes the observation for the given simulation state.
 
         Here we assume that the default observation is just the simulator state. We
@@ -154,10 +154,14 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
                 sdc_xy_curr, sdc_yaw_curr, edge_points
             )
 
-        obs = jnp.concatenate(
-            [sdc_vel_curr, sdc_yaw_rate_curr, dir_diff, distance_to_edge], axis=-1
-        )  ## add information of the track? + yaw rate  #future_track.ravel()
-        # sdc_xy_curr, jnp.array([sdc_yaw_curr]), , debug_value
+        obs = GokartObservation(
+            vel_x=jnp.array([sdc_vel_curr[0]]),  # doing this for shape
+            vel_y=jnp.array([sdc_vel_curr[1]]),
+            vel_r=sdc_yaw_rate_curr,
+            dir_diff=dir_diff,
+            dist_to_edge=distance_to_edge,
+        )
+        
         return obs
 
     def reset(self, state: PlanningGoKartSimState, rng: jax.Array | None = None) -> PlanningGoKartSimState:

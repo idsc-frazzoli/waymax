@@ -32,7 +32,7 @@ from waymax import config as _config, datatypes, dynamics as _dynamics, rewards
 from waymax.agents import actor_core
 from waymax.env import typedefs as types, PlanningAgentEnvironment
 from waymax.utils.geometry import rotation_matrix, wrap_yaws
-from waymax.datatypes.observation import Observation, ObjectPose2D
+from waymax.datatypes.gokart_obs import GokartObservation
 
 typechecker = beartype.beartype
 
@@ -87,7 +87,7 @@ class GokartRacingDREnvironment(PlanningAgentEnvironment):
         specs = BoundedArray((15,), jnp.float32, minimum, maximum)
         return specs
 
-    def observe(self, state: PlanningGoKartSimState) -> types.Observation:
+    def observe(self, state: PlanningGoKartSimState) -> GokartObservation:
         """Computes the observation for the given simulation state.
 
         Here we assume that the default observation is just the simulator state. We
@@ -162,36 +162,32 @@ class GokartRacingDREnvironment(PlanningAgentEnvironment):
             distance_to_edge, _, _ = jax.vmap(calculate_distances_to_boundary, in_axes=(0, 0, 0))(
                 sdc_xy_curr, sdc_yaw_curr, edge_points
             )
-
-        obs = jnp.concatenate(
-            [sdc_vel_curr, sdc_yaw_rate_curr, dir_diff, distance_to_edge], axis=-1
-        )  ## add information of the track? + yaw rate  #future_track.ravel()
-
-        ## DEBUGGING
-        # print(f"Curr yaw in observe: {sdc_yaw_curr}")
-        # print(f"Curr ref in observe: {dir_ref_vec} at position {sdc_xy_curr}")
-        # print(f"Curr dirr_diff in observe: {dir_diff} at position {sdc_xy_curr}")
+            
+        obs = GokartObservation(
+            vel_x=jnp.array([sdc_vel_curr[0]]),  # doing this for shape
+            vel_y=jnp.array([sdc_vel_curr[1]]),
+            vel_r=sdc_yaw_rate_curr,
+            dir_diff=dir_diff,
+            dist_to_edge=distance_to_edge,
+        )
 
         return obs
     
-    def apply_domain_rando(self, obs: jax.Array, rng: jax.Array) -> Array:
-        # Generate Gaussian noise with JAX
-        # gaussian properties: consider centered gaussian: mu = 0
-        sigma_states = jnp.array([self.sigma_vx, self.sigma_vy, self.sigma_r])
-
-        sigma_yaw = jnp.array([self.sigma_yaw])  # orientation: applied to obs dir_diff
-        sigma_xy = self.sigma_xy * jnp.ones(shape=(11,))  # position: applied to obs distance_to_edge (11 values)
-
-        # random sampler from jax with normal distribution
-        noise_states = jax.random.normal(rng, sigma_states.shape) * sigma_states
-        noise_dir_diff = jax.random.normal(rng, sigma_yaw.shape) * sigma_yaw
-        noise_dist_edge = jax.random.normal(rng, sigma_xy.shape) * sigma_xy
-
-        noise_obs = jnp.concatenate([noise_states, noise_dir_diff, noise_dist_edge], axis=0)
-
-        # copy obs and apply randomization as wished
-        obs_noisy = obs + noise_obs
-        return obs_noisy
+    def apply_domain_rando(self, obs: GokartObservation, rng: jax.Array) -> GokartObservation:
+        """Generate Gaussian noise with JAX
+        
+        Gaussian properties: consider centered gaussian, i.e. mu = 0, and some sigma defined in
+        environment object.
+        """
+        old_obs = obs
+        sigma_dist = self.sigma_xy * jnp.ones(shape=(11,))
+        
+        obs.vel_x += jax.random.normal(rng, shape=(1,)) * self.sigma_vx
+        obs.vel_y += jax.random.normal(rng, shape=(1,)) * self.sigma_vy
+        obs.vel_r += jax.random.normal(rng, shape=(1,)) * self.sigma_r
+        obs.dir_diff += jax.random.normal(rng, shape=(1,)) * self.sigma_yaw
+        obs.dist_to_edge += jax.random.normal(rng, shape=sigma_dist.shape) * sigma_dist
+        return obs
 
     def reset(self, state: PlanningGoKartSimState, rng: jax.Array | None = None) -> PlanningGoKartSimState:
         """Resets the simulator state.
@@ -432,5 +428,3 @@ def get_future_track(state: PlanningGoKartSimState, car_pos, car_orientation, ne
     r_matrix = rotation_matrix(car_orientation)
     relative_track_local = relative_track @ r_matrix
     return relative_track_local, track_points
-
-
