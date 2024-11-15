@@ -171,13 +171,6 @@ class GokartRacingDREnvironment(PlanningAgentEnvironment):
             dist_to_edge=distance_to_edge,
         )
 
-        # Normalize the observations
-        obs.vel_x /= 10
-        obs.vel_y /= 10
-        # obs.vel_r /=
-        # obs.dir_diff
-        obs.dist_to_edge /= 30
-
         return obs
 
     def apply_domain_rando(self, obs: GokartObservation, rng: jax.Array) -> GokartObservation:
