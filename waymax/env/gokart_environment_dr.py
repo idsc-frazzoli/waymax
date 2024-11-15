@@ -69,14 +69,13 @@ class GokartRacingDREnvironment(PlanningAgentEnvironment):
             rewards={"gokart_offroad": -5, "gokart_progress": 1.0, "gokart_orientation": 0.05}
         )
         self._reward_function = rewards.LinearCombinationReward(reward_config)
-        
+
         # domain rando config
         self.sigma_vx = 0.173  # longitudinal vel.
         self.sigma_vy = 0.139  # lateral vel.
         self.sigma_r = 0.044  # angular vel
         self.sigma_yaw = 0.024  # orientation
         self.sigma_xy = 0.160  # position
-        
 
     def observation_spec(self) -> BoundedArray:
         # todo add observation information (should not be from ppo config)
@@ -162,7 +161,8 @@ class GokartRacingDREnvironment(PlanningAgentEnvironment):
             distance_to_edge, _, _ = jax.vmap(calculate_distances_to_boundary, in_axes=(0, 0, 0))(
                 sdc_xy_curr, sdc_yaw_curr, edge_points
             )
-            
+
+        # creating object of GokartObservation
         obs = GokartObservation(
             vel_x=jnp.array([sdc_vel_curr[0]]),  # doing this for shape
             vel_y=jnp.array([sdc_vel_curr[1]]),
@@ -171,8 +171,15 @@ class GokartRacingDREnvironment(PlanningAgentEnvironment):
             dist_to_edge=distance_to_edge,
         )
 
+        # Normalize the observations
+        obs.vel_x /= 10
+        obs.vel_y /= 10
+        # obs.vel_r /=
+        # obs.dir_diff
+        obs.dist_to_edge /= 30
+
         return obs
-    
+
     def apply_domain_rando(self, obs: GokartObservation, rng: jax.Array) -> GokartObservation:
         """Generate Gaussian noise with JAX
         
@@ -180,7 +187,7 @@ class GokartRacingDREnvironment(PlanningAgentEnvironment):
         environment object.
         """
         sigma_dist = self.sigma_xy * jnp.ones(shape=(11,))
-        
+
         obs.vel_x += jax.random.normal(rng, shape=(1,)) * self.sigma_vx
         obs.vel_y += jax.random.normal(rng, shape=(1,)) * self.sigma_vy
         obs.vel_r += jax.random.normal(rng, shape=(1,)) * self.sigma_r

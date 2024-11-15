@@ -11,12 +11,12 @@ class GokartObservation:
   this is only considering the single agent case.
 
   Attributes:
-    vel_x: Longitudinal velocity in world frame of shape (...,num_envs, 1).
-    vel_y: Lateral velocity in world frame of shape (...,num_envs, 1).
-    vel_r: Angular velocity in world frame of shape (...,num_envs, 1).
+    vel_x: Longitudinal velocity in body frame of shape (..., 1).
+    vel_y: Lateral velocity in body frame of shape (..., 1).
+    vel_r: Angular velocity in body frame of shape (..., 1).
     dir_diff: Difference between orientation of object and reference 
-      direction of shape (...,num_envs, 1).
-    dist_to_edge: Distance to the boundary of the track of shape (...,num_ennvs, 10).
+      direction of shape (..., 1).
+    dist_to_edge: Distance to the boundary of the track of shape (..., 10).
   """
 
   vel_x:jax.Array
