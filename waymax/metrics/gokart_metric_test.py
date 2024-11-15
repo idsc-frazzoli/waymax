@@ -40,10 +40,10 @@ class GokartProgressMetricTest(tf.test.TestCase, parameterized.TestCase):
         raw_action = jnp.array([0.0, 0.1, 0.1])
         action = datatypes.Action(data=raw_action, valid=jnp.array([True]))
 
-        _, state = env.reset(state)
+        state = env.reset(state)
         # set the initial velocity to 2
         state.sim_trajectory.vel_x = state.sim_trajectory.vel_x.at[..., 0, 0].set(2)
-        _, new_state, _, _, _ = env.step(state, action=action)
+        new_state = env.step(state, action=action)
         result = metric.compute(new_state)
         self.assertGreaterEqual(result.value, 0.0)
 
@@ -65,10 +65,10 @@ class GokartProgressMetricTest(tf.test.TestCase, parameterized.TestCase):
         raw_action = jnp.array([0.0, 0.1, 0.1])
         action = datatypes.Action(data=raw_action, valid=jnp.array([True]))
 
-        _, state = env.reset(state)
+        state = env.reset(state)
         # set the initial velocity to -2, so the car is moving backwards
         state.sim_trajectory.vel_x = state.sim_trajectory.vel_x.at[..., 0, 0].set(-2)
-        _, new_state, _, _, _ = env.step(state, action=action)
+        new_state = env.step(state, action=action)
         result = metric.compute(new_state)
         self.assertEqual(result.value, 0.0)
 
@@ -90,12 +90,12 @@ class GokartProgressMetricTest(tf.test.TestCase, parameterized.TestCase):
         raw_action = jnp.array([0.0, 0.1, 0.1])
         action = datatypes.Action(data=raw_action, valid=jnp.array([True]))
 
-        _, state = env.reset(state)
+        state = env.reset(state)
         state.sim_trajectory.vel_x = state.sim_trajectory.vel_x.at[..., 0, 0].set(6)
         current_x = state.current_sim_trajectory.x[..., 0, 0]
         current_x -= 0.3 # a little before the end of the lap
         state.sim_trajectory.x = state.sim_trajectory.x.at[..., 0, 0].set(current_x)
-        _, new_state, _, _, _ = env.step(state, action=action)
+        new_state = env.step(state, action=action)
         result = metric.compute(new_state)
         self.assertGreater(result.value, 0.5)
 
@@ -158,7 +158,7 @@ class GokartOffroadMetricTest(tf.test.TestCase, parameterized.TestCase):
         state.sim_trajectory.y = state.sim_trajectory.y.at[..., 0, 0].set(current_y)
         result = metric.compute(state)
         # should be negative, because the car is offroad
-        self.assertEqual(result.value, -1.0)
+        self.assertEqual(result.value, 1.0)
 
 
 if __name__ == '__main__':

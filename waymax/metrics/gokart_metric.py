@@ -105,6 +105,7 @@ class GokartProgressMetric(abstract_metric.AbstractMetric):
         movement_vector = sdc_xy_curr - sdc_xy_last
         movement_vector /= jnp.linalg.norm(movement_vector)
         # Decreased reward if the movement is not "aligned" with the track tangent
+        # In particular to avoid crossing the finish line backwards and getting a high reward
         alignment = jnp.dot(movement_vector, dir_ref)
         progress = jnp.where(
                 alignment > 0.7,  # ~= cos45 around 45 degree
@@ -199,11 +200,9 @@ class GokartOrientationMetric(abstract_metric.AbstractMetric):
         # encourage the car to move in the direction of the reference track(centerline)
         orientation_reward = jnp.exp(-dir_diff ** 2 / 0.5)
         # scaled by the velocity, negative if the car is moving in the opposite direction
-        orientation_reward *= sdc_vel_curr[0]  # (...,) vx
-        # ndm alternative: Only if the longitudinal velocity is non-zero
-        # orientation_reward = jnp.tanh(sdc_vel_curr[0]) * orientation_reward
-        # az: maybe tanh instead of clipping?
-        orientation_reward = jnp.clip(orientation_reward, -1, 1)
+        orientation_reward *= jnp.tanh(sdc_vel_curr[0])  # (...,) vx
+        #az: maybe tanh instead of clipping?
+        orientation_reward = jnp.clip(orientation_reward, -1, 1) # 0.05
 
         return MetricResult.create_and_validate(
                 value=orientation_reward,
@@ -217,4 +216,9 @@ class GokartOffroadMetric(OffroadMetric):
     def compute(self, state: datatypes.GoKartSimState) -> MetricResult:
         """Same as the OffroadMetric but with float32 dtype."""
         is_offroad = super().compute(state)
-        return is_offroad.replace(value=is_offroad.value.astype(jnp.float32))
+        # fixme remove player dimension (to be coherent with all the other gokart metrics,
+        #  but not ideal for multiagent envs)
+        return is_offroad.replace(
+                value=jnp.squeeze(is_offroad.value, axis=-1),
+                valid=jnp.squeeze(is_offroad.valid, axis=-1)
+        )
