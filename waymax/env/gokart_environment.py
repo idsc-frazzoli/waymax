@@ -16,7 +16,6 @@
 
 import dataclasses
 from typing import Sequence
-from typing import Optional
 
 import beartype
 import chex
@@ -46,23 +45,24 @@ class PlanningGoKartSimState(datatypes.GoKartSimState):
         will be updated. The list of sim agent states should be as long as and in
         the same order as the number of sim agents run in the environment.
     """
-
     sim_agent_actor_states: Sequence[actor_core.ActorState] = ()
 
 
 class GokartRacingEnvironment(PlanningAgentEnvironment):
 
     def __init__(
-        self,
-        dynamics_model: _dynamics.DynamicsModel,
-        config: _config.EnvironmentConfig,
-        sim_agent_actors: Sequence[actor_core.WaymaxActorCore] = (),
-        sim_agent_params: Sequence[actor_core.Params] = (),
+            self,
+            dynamics_model: _dynamics.DynamicsModel,
+            config: _config.EnvironmentConfig,
+            sim_agent_actors: Sequence[actor_core.WaymaxActorCore] = (),
+            sim_agent_params: Sequence[actor_core.Params] = (),
     ) -> None:
         super().__init__(dynamics_model, config, sim_agent_actors, sim_agent_params)
         self._state_dynamics = _dynamics.GoKartStateDynamics()
         self.metrics_config = dataclasses.replace(
-            _config.MetricsConfig(), metrics_to_run=("gokart_offroad", "gokart_progress", "gokart_orientation")
+                _config.MetricsConfig(), metrics_to_run=(
+                    "gokart_offroad", "gokart_progress", "gokart_orientation"
+                    )
         )
         reward_config = _config.LinearCombinationRewardConfig(
             rewards={"gokart_offroad": 5, "gokart_progress": 1.0, "gokart_orientation": 0.05}
@@ -106,23 +106,23 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
 
         # shape: (...,2)
         sdc_xy_curr = datatypes.select_by_onehot(
-            pos_xy,
-            state.object_metadata.is_sdc,
-            keepdims=False,
+                pos_xy,
+                state.object_metadata.is_sdc,
+                keepdims=False,
         )
         sdc_vel_curr = datatypes.select_by_onehot(
-            vel_xy,
-            state.object_metadata.is_sdc,
-            keepdims=False,
+                vel_xy,
+                state.object_metadata.is_sdc,
+                keepdims=False,
         )
 
         # shape: (..., num_objects, timesteps=1) -> (..., num_objects)
         yaw = state.current_sim_trajectory.yaw[..., 0]
 
         sdc_yaw_curr = datatypes.select_by_onehot(
-            yaw,
-            state.object_metadata.is_sdc,
-            keepdims=False,
+                yaw,
+                state.object_metadata.is_sdc,
+                keepdims=False,
         )
 
         dir_ref, nearest_index = self._get_ref_direction(state)  # (...,num,2)
@@ -136,11 +136,10 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         yaw_rate = state.current_sim_trajectory.yaw_rate[..., 0]
 
         sdc_yaw_rate_curr = datatypes.select_by_onehot(
-            yaw_rate,
-            state.object_metadata.is_sdc,
-            keepdims=False,
+                yaw_rate,
+                state.object_metadata.is_sdc,
+                keepdims=False,
         )
-        sdc_yaw_rate_curr = jnp.array([sdc_yaw_rate_curr])
 
         # TODO: for testing, need to find a better way to get the edge points
         edge_points = state.roadgraph_points.xy[..., 2000:, :]
@@ -157,7 +156,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         obs = GokartObservation(
             vel_x=jnp.array([sdc_vel_curr[0]]),  # doing this for shape
             vel_y=jnp.array([sdc_vel_curr[1]]),
-            vel_r=sdc_yaw_rate_curr,
+            vel_r=jnp.array([sdc_yaw_rate_curr]),
             dir_diff=dir_diff,
             dist_to_edge=distance_to_edge,
         )
@@ -174,7 +173,9 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         Returns:
           A new state of the simulator after resetting.
         """
-        chex.assert_equal(self.config.max_num_objects, state.log_trajectory.num_objects)
+        chex.assert_equal(
+            self.config.max_num_objects, state.log_trajectory.num_objects
+        )
 
         # Fills with invalid values (i.e. -1.) and False.
         sim_traj_uninitialized = datatypes.fill_invalid_trajectory(state.log_trajectory)
