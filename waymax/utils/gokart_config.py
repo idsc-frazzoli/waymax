@@ -7,7 +7,7 @@ from jaxtyping import Float
 
 @dataclass
 class GoKartGeometry:
-    l: float = 1.19  # Distance from front to rear axle (must be equal to l1 + l2)
+    l: float = field(init=False)  # Distance from front to rear axle (equal to l1 + l2)
     l1: float = 0.72  # Distance from cog to front tires
     l2: float = 0.47  # Distance from cog to rear tires
     w1: float = 0.94  # Distance between front Tires
@@ -17,16 +17,20 @@ class GoKartGeometry:
     frontaxle2front: float = 0.33  # Distance from the front axle to the front of the kart
     wheel2border: float = 0.18  # Side distance between center of the wheel and external frame
     F2n: float = l1 / (l1 + l2)  # Normal force at the rear axle "portion of Mass supported by rear tire"
-    m: float = 335  # Mass kg of the gokart
+    m: float = field(init=False)  # Mass kg of the gokart
     
     def __post_init__(self):
-        assert self.l == self.l1 + self.l2, f"l {self.l} must be equal to l1 {self.l1} + l2 {self.l2}"
+        self.l = self.l1 + self.l2
+        # With the current dynamics from the forces pro solver, the mass will cancel out 
+        # in the formulas, so changing the mass will not affect the results,
+        # but keeping it here for reference with the formulas of the forces pro model.
+        self.m = 335
 
 
 @dataclass
 class TricycleParams:
     Iz: float = 0.7  # Inertia around the z axis
-    REG_: float = 0.1  # Regularization factor
+    REG_: float = 0.1  # Regularization factor for v_x for sideslip angle estimation
 
 
 @dataclass

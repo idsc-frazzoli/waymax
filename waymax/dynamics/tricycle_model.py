@@ -23,6 +23,7 @@ acceleration and steering command range can still be specified by `max_accel`
 and `max_steering` in the class definition function.
 """
 
+from typing import Optional
 from dm_env import specs
 import jax
 import jax.numpy as jnp
@@ -74,9 +75,16 @@ class TricycleModel(DynamicsModel):
     self._max_steering = max_steering
     self._normalize_actions = normalize_actions
 
-  def action_spec(self, opposite_normalize_actions = False) -> specs.BoundedArray:
-    """Action spec for the acceleration steering continuous action space."""
-    normalize_actions = self._normalize_actions ^ opposite_normalize_actions
+  def action_spec(self, normalize_actions: Optional[bool] = None) -> specs.BoundedArray:
+    """Action spec for the acceleration steering continuous action space.
+    
+    Args:
+      normalize_actions: Whether to obtain the normalized action_spec output.
+      Default to None, in which case it uses the value of self._normalize_actions.
+    """
+    if normalize_actions is None:
+      normalize_actions = self._normalize_actions
+
     if not normalize_actions:
       return specs.BoundedArray(
           # last dim: (acceleration, steering)
@@ -94,23 +102,26 @@ class TricycleModel(DynamicsModel):
           maximum=np.array([1.0, 1.0, 1.0]),
       )
 
-  def _clip_values(self, action_array: jax.Array, opposite_normalize_actions = False) -> jax.Array:
+  def _clip_values(self, action_array: jax.Array, normalize_actions : Optional[bool] = None) -> jax.Array:
     """Clip action values to be within the allowable ranges."""
     
+    if normalize_actions is None:
+      normalize_actions = self._normalize_actions
+      
     steering = jnp.clip(
         action_array[..., 0],
-        self.action_spec(opposite_normalize_actions).minimum[0],
-        self.action_spec(opposite_normalize_actions).maximum[0],
+        self.action_spec(normalize_actions).minimum[0],
+        self.action_spec(normalize_actions).maximum[0],
     )
     acc_l = jnp.clip(
         action_array[..., 1],
-        self.action_spec(opposite_normalize_actions).minimum[1],
-        self.action_spec(opposite_normalize_actions).maximum[1],
+        self.action_spec(normalize_actions).minimum[1],
+        self.action_spec(normalize_actions).maximum[1],
     )
     acc_r = jnp.clip(
         action_array[..., 2],
-        self.action_spec(opposite_normalize_actions).minimum[2],
-        self.action_spec(opposite_normalize_actions).maximum[2],
+        self.action_spec(normalize_actions).minimum[2],
+        self.action_spec(normalize_actions).maximum[2],
     )
     return jnp.stack([steering, acc_l, acc_r], axis=-1)
 
@@ -193,7 +204,7 @@ class TricycleModel(DynamicsModel):
       action_spec = self.action_spec()
       action_spec_minimum = jnp.array(action_spec.minimum)
       action_spec_maximum = jnp.array(action_spec.maximum)
-      raw_action_spec = self.action_spec(self._normalize_actions)
+      raw_action_spec = self.action_spec(normalize_actions=False)
       raw_action_spec_minimum = jnp.array(raw_action_spec.minimum)
       raw_action_spec_maximum = jnp.array(raw_action_spec.maximum)
       
@@ -201,7 +212,7 @@ class TricycleModel(DynamicsModel):
       action = (action - action_spec_minimum) / (action_spec_maximum - action_spec_minimum) * \
         (raw_action_spec_maximum - raw_action_spec_minimum) + raw_action_spec_minimum
     
-    action_array = self._clip_values(action, self._normalize_actions)
+    action_array = self._clip_values(action, normalize_actions=False)
 
     # beta, AB_L, AB_R = jnp.split(action_array, 3, axis=-1)
     beta, AB_L, AB_R = action_array
