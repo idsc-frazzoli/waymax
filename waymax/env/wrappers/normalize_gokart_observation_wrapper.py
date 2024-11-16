@@ -70,7 +70,7 @@ class NormalizeGokartObservationWrapper(EnvWrapper):
         
         obs_norm_flattened = (obs.flatten() - norm_state.mean) / jnp.sqrt(norm_state.var + 1e-8)
         
-        # fixme like this it stays invariant to changes of obs dim in 
+        # fixme like this it stays invariant to changes of obs dim in
         # distance to edge, but not anything else
         obs_norm = GokartObservation(
             vel_x=jnp.array([obs_norm_flattened[0]]),  # doing this for shape
