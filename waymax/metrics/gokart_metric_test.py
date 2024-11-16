@@ -13,6 +13,7 @@ from waymax.metrics.gokart_metric import GokartProgressMetric, GokartOrientation
 from waymax.utils.gokart_config import GoKartGeometry, PajieckaParams, TricycleParams
 from waymax.utils.gokart_utils import create_init_state
 
+
 class GokartProgressMetricTest(tf.test.TestCase, parameterized.TestCase):
     def test_progress_without_stepping(self):
         metric = GokartProgressMetric()

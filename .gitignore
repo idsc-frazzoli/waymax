@@ -14,3 +14,4 @@ __pycache__
 *.egg-info
 rl/ppo/gokartlogs
 rl/ppo/waymaxlogs
+demo_scripts/png/
