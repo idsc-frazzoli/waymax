@@ -20,8 +20,7 @@ class EnvWrapper:
 
 class DomainRandomizationWrapper(EnvWrapper):
     """
-    Brax-like interface wrapper for the Waymax environment.
-    Differently from the original implementation, this wrapper supports rng arguments for stepping and resetting.
+    Wrapper for the domain randomization.
     """
 
     def __init__(self, wrapped_env: AbstractEnvironment) -> None:
@@ -44,7 +43,7 @@ class DomainRandomizationWrapper(EnvWrapper):
         Gaussian properties: consider centered gaussian, i.e. mu = 0, and some sigma defined in
         environment object.
         """
-        obs = self._wrapped_env.observe(state)
+        obs = self._wrapped_env.observe(state, rng)
         
         sigma_dist = self.sigma_xy * jnp.ones(shape=(11,))
 
