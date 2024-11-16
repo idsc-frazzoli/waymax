@@ -71,6 +71,9 @@ def test_domain_rando():
     # Ensure the noisy observation is not the same as the original observation
     assert not jnp.array_equal(obs_original, obs_noisy.flatten()), "Observations are the same, but they should not be."
 
+    
+
+
 if __name__ == '__main__':
     test_domain_rando()
     

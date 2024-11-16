@@ -173,20 +173,20 @@ class GokartRacingDREnvironment(PlanningAgentEnvironment):
 
         return obs
 
-    def apply_domain_rando(self, obs: GokartObservation, rng: jax.Array) -> GokartObservation:
-        """Generate Gaussian noise with JAX
+    # def apply_domain_rando(self, obs: GokartObservation, rng: jax.Array) -> GokartObservation:
+    #     """Generate Gaussian noise with JAX
         
-        Gaussian properties: consider centered gaussian, i.e. mu = 0, and some sigma defined in
-        environment object.
-        """
-        sigma_dist = self.sigma_xy * jnp.ones(shape=(11,))
+    #     Gaussian properties: consider centered gaussian, i.e. mu = 0, and some sigma defined in
+    #     environment object.
+    #     """
+    #     sigma_dist = self.sigma_xy * jnp.ones(shape=(11,))
 
-        obs.vel_x += jax.random.normal(rng, shape=(1,)) * self.sigma_vx
-        obs.vel_y += jax.random.normal(rng, shape=(1,)) * self.sigma_vy
-        obs.vel_r += jax.random.normal(rng, shape=(1,)) * self.sigma_r
-        obs.dir_diff += jax.random.normal(rng, shape=(1,)) * self.sigma_yaw
-        obs.dist_to_edge += jax.random.normal(rng, shape=sigma_dist.shape) * sigma_dist
-        return obs
+    #     obs.vel_x += jax.random.normal(rng, shape=(1,)) * self.sigma_vx
+    #     obs.vel_y += jax.random.normal(rng, shape=(1,)) * self.sigma_vy
+    #     obs.vel_r += jax.random.normal(rng, shape=(1,)) * self.sigma_r
+    #     obs.dir_diff += jax.random.normal(rng, shape=(1,)) * self.sigma_yaw
+    #     obs.dist_to_edge += jax.random.normal(rng, shape=sigma_dist.shape) * sigma_dist
+    #     return obs
 
     def reset(self, state: PlanningGoKartSimState, rng: jax.Array | None = None) -> PlanningGoKartSimState:
         """Resets the simulator state.

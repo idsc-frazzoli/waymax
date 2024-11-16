@@ -266,7 +266,7 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
     state = state.replace(sim_agent_actor_states=init_actor_states)
     return state
 
-  def observe(self, state: PlanningAgentSimulatorState) -> types.Observation:
+  def observe(self, state: PlanningAgentSimulatorState, rng: jax.Array) -> types.Observation:
     """Computes the observation for the given simulation state.
 
     Here we assume that the default observation is just the simulator state. We

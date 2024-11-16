@@ -160,7 +160,7 @@ def rollout(
         actor_params, carry.state, carry.actor_state, action_rng
     )
     next_state = env.step(carry.state, actor_output.action)
-    next_observation = env.observe(next_state)
+    next_observation = env.observe(next_state, rng)
     next_carry = RolloutCarry(
         state=next_state,
         observation=next_observation,
@@ -177,7 +177,7 @@ def rollout(
 
   init_carry = RolloutCarry(
       state=reset_state,
-      observation=env.observe(reset_state),
+      observation=env.observe(reset_state, rng),
       rng=rng,
       actor_state=actor_init_state,
   )
