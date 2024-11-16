@@ -132,6 +132,8 @@ class TricycleModel(DynamicsModel):
       rk4_vmap = jax.vmap(self._RK4_update, in_axes=(0, 0, None))
     elif len(x.shape) == 3: # x shape (batch_size, num_objects, num_timesteps=1)
       rk4_vmap = jax.vmap(jax.vmap(self._RK4_update, in_axes=(0, 0, None)), in_axes=(0, 0, None))
+    else:
+      raise ValueError("Invalid shape for x: {}".format(x.shape))
 
     new_states = rk4_vmap(action_clipped, state, t)
 
