@@ -7,7 +7,6 @@ from jaxtyping import Float
 
 @dataclass
 class GoKartGeometry:
-    l: float = field(init=False)  # Distance from front to rear axle (equal to l1 + l2)
     l1: float = 0.72  # Distance from cog to front tires
     l2: float = 0.47  # Distance from cog to rear tires
     w1: float = 0.94  # Distance between front Tires
@@ -18,6 +17,7 @@ class GoKartGeometry:
     wheel2border: float = 0.18  # Side distance between center of the wheel and external frame
     F2n: float = l1 / (l1 + l2)  # Normal force at the rear axle "portion of Mass supported by rear tire"
     m: float = field(init=False)  # Mass kg of the gokart
+    l: float = field(init=False)  # Distance from front to rear axle (equal to l1 + l2)
     
     def __post_init__(self):
         self.l = self.l1 + self.l2
@@ -31,6 +31,8 @@ class GoKartGeometry:
 class TricycleParams:
     Iz: float = 0.7  # Inertia around the z axis
     REG_: float = 0.1  # Regularization factor for v_x for sideslip angle estimation
+    max_accel: float = 6.0
+    max_steering: float = 1.0  # 0.3
 
 
 @dataclass

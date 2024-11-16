@@ -1,33 +1,17 @@
-# Copyright 2023 The Waymax Authors.
-#
-# Licensed under the Waymax License Agreement for Non-commercial Use
-# Use (the "License"); you may not use this file except in compliance
-# with the License. You may obtain a copy of the License at
-#
-#     https://github.com/waymo-research/waymax/blob/main/LICENSE
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-"""Implementation of the bicycle (acceleration, steering) dynamics model.
-
-
+"""
+Implementation of the bicycle (acceleration, steering) dynamics model.
 
 This action space always uses the [-1.0, 1.0] as the range for acceleration
 and steering commands to be consistent with other RL training pipeline since
-many algorithms' hyperparameters are tuned based on this assumption. The actual
-acceleration and steering command range can still be specified by `max_accel`
+many algorithms' hyperparameters are tuned based on this assumption.
+The actual acceleration and steering command range can still be specified by `max_accel`
 and `max_steering` in the class definition function.
 """
 
-from typing import Optional
-from dm_env import specs
 import jax
 import jax.numpy as jnp
 import numpy as np
+from dm_env import specs
 
 from waymax import datatypes
 from waymax.dynamics import abstract_dynamics
@@ -35,11 +19,7 @@ from waymax.utils import geometry
 from waymax.utils.gokart_config import GoKartGeometry, TricycleParams, PajieckaParams
 
 DynamicsModel = abstract_dynamics.DynamicsModel
-# TODO Determine whether 0.6 is appropriate speed limit.
-# This speed limit helps to filter out false positive very large steering value.
-_SPEED_LIMIT = 0.6  # Units: m/s
-
-_G = 9.81
+_G = 9.81 # Units: m/s^2
 
 class TricycleModel(DynamicsModel):
   """Dynamics model using acceleration and steering curvature for control."""
@@ -50,9 +30,7 @@ class TricycleModel(DynamicsModel):
       model_params: TricycleParams,
       paj_params: PajieckaParams,
       dt: float = 0.1,
-      max_accel: float = 6.0,
-      max_steering: float = 1.0, # 0.3
-      normalize_actions: bool = False,
+      normalize_actions: bool = True,
   ):
     """Initializes the bounds of the action space.
 
@@ -63,73 +41,53 @@ class TricycleModel(DynamicsModel):
         inverse of the turning radius (the minimum radius of available space
         required for that vehicle to make a circular turn).
       normalize_actions: Whether to normalize the action range to [-1,1] or not.
-        By default it uses the unnormalized range and in order to train with RL,
+        By default, it uses the unnormalized range in order to train with RL,
         such as with ACME. Ideally we should normalize the ranges.
     """
-    super().__init__()
-    self.gk_geometry = gk_geometry
-    self.model_params = model_params
-    self.paj_params = paj_params
+    #super().__init__()
+    self._gk_geometry = gk_geometry
+    self._model_params = model_params
+    self._paj_params = paj_params
     self._dt = dt
-    self._max_accel = max_accel
-    self._max_steering = max_steering
     self._normalize_actions = normalize_actions
 
-  def action_spec(self, normalize_actions: Optional[bool] = None) -> specs.BoundedArray:
-    """Action spec for the acceleration steering continuous action space.
-    
-    Args:
-      normalize_actions: Whether to obtain the normalized action_spec output.
-      Default to None, in which case it uses the value of self._normalize_actions.
+  def action_spec(self) -> specs.BoundedArray:
     """
-    if normalize_actions is None:
-      normalize_actions = self._normalize_actions
-
-    if not normalize_actions:
+    Action spec for the acceleration steering continuous action space.
+    """
+    action_shape = (3,)
+    if self._normalize_actions:
       return specs.BoundedArray(
           # last dim: (acceleration, steering)
-          shape=(3,),
+          shape=action_shape,
           dtype=np.float32,
-          minimum=np.array([-self._max_steering, -self._max_accel, -self._max_accel]),
-          maximum=np.array([self._max_steering, self._max_accel, self._max_accel]),
+          minimum=np.ones(action_shape) * -1.0,
+          maximum=np.ones(action_shape),
       )
     else:
       return specs.BoundedArray(
-          # last dim: (acceleration, steering)
-          shape=(3,),
-          dtype=np.float32,
-          minimum=np.array([-1.0, -1.0, -1.0]),
-          maximum=np.array([1.0, 1.0, 1.0]),
+              # last dim: (steering)
+              shape=action_shape,
+              dtype=np.float32,
+              minimum=np.array(
+                      [-self._model_params.max_steering, -self._model_params.max_accel, -self._model_params.max_accel]),
+              maximum=np.array(
+                      [self._model_params.max_steering, self._model_params.max_accel, self._model_params.max_accel]),
       )
 
-  def _clip_values(self, action_array: jax.Array, normalize_actions : Optional[bool] = None) -> jax.Array:
+  def _clip_values(self, action_array: jax.Array) -> jax.Array:
     """Clip action values to be within the allowable ranges."""
-    
-    if normalize_actions is None:
-      normalize_actions = self._normalize_actions
-      
-    steering = jnp.clip(
-        action_array[..., 0],
-        self.action_spec(normalize_actions).minimum[0],
-        self.action_spec(normalize_actions).maximum[0],
+    return jnp.clip(
+        action_array,
+        jnp.asarray(self.action_spec().minimum),
+        jnp.asarray(self.action_spec().maximum)
     )
-    acc_l = jnp.clip(
-        action_array[..., 1],
-        self.action_spec(normalize_actions).minimum[1],
-        self.action_spec(normalize_actions).maximum[1],
-    )
-    acc_r = jnp.clip(
-        action_array[..., 2],
-        self.action_spec(normalize_actions).minimum[2],
-        self.action_spec(normalize_actions).maximum[2],
-    )
-    return jnp.stack([steering, acc_l, acc_r], axis=-1)
 
   @jax.named_scope('TricycleModel.compute_update')
   def compute_update(
       self,
       action: datatypes.Action,
-      trajectory: datatypes.GoKartTrajectory,
+      trajectory: datatypes.GokartTrajectory,
   ) -> datatypes.GoKartTrajectoryUpdate:
     """Computes the pose and velocity updates at timestep.
 
@@ -160,12 +118,14 @@ class TricycleModel(DynamicsModel):
 
     x = trajectory.x   # shape (..., num_objects, num_timesteps=1)
     y = trajectory.y
-    vel_x = trajectory.vel_x  
+    vel_x = trajectory.vel_x
     vel_y = trajectory.vel_y
     yaw = trajectory.yaw
     yaw_rate = trajectory.yaw_rate
     # yaw_rate = jnp.zeros_like(vel_x)
     state = jnp.concatenate((x, y, vel_x, vel_y, yaw, yaw_rate), axis=-1)
+
+    action_clipped = self._clip_values(action.data)
 
     # Vectorize _RK4_update function along batch and num_objects dimensions
     if len(x.shape) == 2:  # x shape (num_objects, num_timesteps=1)
@@ -173,8 +133,8 @@ class TricycleModel(DynamicsModel):
     elif len(x.shape) == 3: # x shape (batch_size, num_objects, num_timesteps=1)
       rk4_vmap = jax.vmap(jax.vmap(self._RK4_update, in_axes=(0, 0, None)), in_axes=(0, 0, None))
 
-    new_states = rk4_vmap(action.data, state, t)
-    
+    new_states = rk4_vmap(action_clipped, state, t)
+
     return datatypes.GoKartTrajectoryUpdate(
         x=new_states[..., 0:1],
         y=new_states[..., 1:2],
@@ -185,7 +145,7 @@ class TricycleModel(DynamicsModel):
         valid=trajectory.valid & action.valid,
     )
   def _dynamics(self, action: jax.Array, state: jnp.ndarray,):
-    '''
+    """
     Note: all dynamics are normalized w.r.t. the normal force
     hence the name *_acc instead of *_force
     Action: beta: steering wheel angle
@@ -198,39 +158,30 @@ class TricycleModel(DynamicsModel):
             vel_y: y velocity
             yaw: yaw angle
             yaw_rate: yaw rate
-    '''
-    
+    """
+
     if self._normalize_actions:
-      action_spec = self.action_spec()
-      action_spec_minimum = jnp.array(action_spec.minimum)
-      action_spec_maximum = jnp.array(action_spec.maximum)
-      raw_action_spec = self.action_spec(normalize_actions=False)
-      raw_action_spec_minimum = jnp.array(raw_action_spec.minimum)
-      raw_action_spec_maximum = jnp.array(raw_action_spec.maximum)
-      
+      # scale back up if actions are normalized
+      act_min = -jnp.array([self._model_params.max_steering, self._model_params.max_accel, self._model_params.max_accel])
+      act_max = jnp.array([self._model_params.max_steering, self._model_params.max_accel, self._model_params.max_accel])
       # convert normalized action [-1,1] to a real world action (eg acceleration [-6,-6])
-      action = (action - action_spec_minimum) / (action_spec_maximum - action_spec_minimum) * \
-        (raw_action_spec_maximum - raw_action_spec_minimum) + raw_action_spec_minimum
-    
-    action_array = self._clip_values(action, normalize_actions=False)
+      action = act_min + (act_max - act_min)*action
 
     # beta, AB_L, AB_R = jnp.split(action_array, 3, axis=-1)
-    beta, AB_L, AB_R = action_array
-    
+    beta, AB_L, AB_R = action
     AB = AB_L + AB_R
-        
     tv = (AB_R - AB_L)
 
     x, y, v_x, v_y, yaw, vrot_z = state # float shape ()
-    
-    reg = jnp.array([self.model_params.REG_]) # self._get_reg_from_velocity(v_x)
+
+    reg = jnp.array([self._model_params.REG_]) # self._get_reg_from_velocity(v_x)
 
     #region front wheel acc
     # front wheel angle
     delta = self._ackermann_mapping(beta, two_wheels=False) # steering angle
 
     # velocities at front wheel (Marc Heim, (2.43))
-    vel1 = jnp.array([v_x, v_y + self.gk_geometry.l1 * vrot_z])   # go kart frame
+    vel1 = jnp.array([v_x, v_y + self._gk_geometry.l1 * vrot_z])   # go kart frame
     # Tire Forces (velocity in wheels reference frame)
     rot_delta = geometry.rotation_matrix(delta)
 
@@ -238,47 +189,47 @@ class TricycleModel(DynamicsModel):
     v_frontaxle = rot_delta.T @ vel1   # front tyre frame
     # friction coefficient front
     mu_front = self._mu_y_front(v_frontaxle[1], v_frontaxle[0], reg=reg)
-    
+
     # longitudinal load transfer
-    load_transfer = self.gk_geometry.h * AB
-    fz_f = - (_G * self.gk_geometry.l2 - load_transfer) * self.gk_geometry.m / self.gk_geometry.l
-    fz_r = - (_G * self.gk_geometry.l1 + load_transfer) * self.gk_geometry.m / self.gk_geometry.l
-    
+    load_transfer = self._gk_geometry.h * AB
+    fz_f = - (_G * self._gk_geometry.l2 - load_transfer) * self._gk_geometry.m / self._gk_geometry.l
+    fz_r = - (_G * self._gk_geometry.l1 + load_transfer) * self._gk_geometry.m / self._gk_geometry.l
+
     # Longitudinal and lateral force in kart frame at the front wheel
     # jax.debug.print("shapes: mu_front = {}, fz_f = {}", mu_front.shape, fz_f.shape)
     # jax.debug.print("mu_front = {}, fz_f = {}\n", mu_front, fz_f)
     f_front_wheel = rot_delta @ jnp.array([0.0,  mu_front * fz_f])
     f_x_front = f_front_wheel[0]
     f_y_front = f_front_wheel[1]
-    
+
     # Longitudinal force from both rear wheels (f_x_left+f_x_right)
-    f_x_rear = AB * self.gk_geometry.m
-    
+    f_x_rear = AB * self._gk_geometry.m
+
     # Back Wheel longitudinal and lateral velocities
-    v_x_backaxle_l = v_x - self.gk_geometry.w2 / 2 * vrot_z
-    v_x_backaxle_r = v_x + self.gk_geometry.w2 / 2 * vrot_z
-    v_y_backaxle = v_y - self.gk_geometry.l2 * vrot_z
-    
+    v_x_backaxle_l = v_x - self._gk_geometry.w2 / 2 * vrot_z
+    v_x_backaxle_r = v_x + self._gk_geometry.w2 / 2 * vrot_z
+    v_y_backaxle = v_y - self._gk_geometry.l2 * vrot_z
+
     # Lateral force from left rear wheel
     f_y_left_rear = self._mu_y_rear(v_y_backaxle, v_x_backaxle_l, AB_L, reg=reg) * fz_r / 2
     # Lateral force from right rear wheel
     f_y_right_rear = self._mu_y_rear(v_y_backaxle, v_x_backaxle_r, AB_R, reg=reg) * fz_r / 2
-    
+
     # Torque vectoring
-    tv_torque = tv * self.gk_geometry.m * self.gk_geometry.w2 / 2
-    
+    tv_torque = tv * self._gk_geometry.m * self._gk_geometry.w2 / 2
+
     # ------ Gokart accelerations
     # Rotational Acceleration of the kart
-    rotacc_z = (tv_torque + f_y_front * self.gk_geometry.l1 - (f_y_right_rear + f_y_left_rear) * self.gk_geometry.l2) / \
-               (self.model_params.Iz * self.gk_geometry.m)
+    rotacc_z = (tv_torque + f_y_front * self._gk_geometry.l1 - (f_y_right_rear + f_y_left_rear) * self._gk_geometry.l2) / \
+               (self._model_params.Iz * self._gk_geometry.m)
     # Longitudinal Acceleration of kart
-    acc_x = (f_x_front + f_x_rear) / self.gk_geometry.m + vrot_z * v_y
+    acc_x = (f_x_front + f_x_rear) / self._gk_geometry.m + vrot_z * v_y
     # Lateral Acceleration of kart
-    acc_y = (f_y_front + f_y_right_rear + f_y_left_rear) / self.gk_geometry.m - vrot_z * v_x
+    acc_y = (f_y_front + f_y_right_rear + f_y_left_rear) / self._gk_geometry.m - vrot_z * v_x
 
     rot_kart = geometry.rotation_matrix(yaw)
     gokart_vel = rot_kart @ jnp.array([v_x, v_y])
-  
+
     x_dot = gokart_vel[0]
     y_dot = gokart_vel[1]
     yaw_dot = vrot_z
@@ -288,7 +239,7 @@ class TricycleModel(DynamicsModel):
     # endregion
     return jnp.array([x_dot, y_dot, vel_x_dot, vel_y_dot, yaw_dot, yaw_rate_dot])
 
-  def _ackermann_mapping(self, steering: float, two_wheels = False) -> float:
+  def _ackermann_mapping(self, steering: float, two_wheels:bool = False) -> float:
     """Maps angle of steerig wheel to the steering angle of front wheel."""
     if two_wheels:
       return (self._ackermann_mapping_left(steering) + self._ackermann_mapping_right(steering))/2
@@ -299,7 +250,7 @@ class TricycleModel(DynamicsModel):
   def _ackermann_mapping_left(self, steering: float) -> float:
     """Maps angle of steerig wheel to the steering angle of front left wheel."""
     return -0.0355 * steering * steering * steering - 0.0455 * steering * steering + 0.36 * steering
-  
+
   def _ackermann_mapping_right(self, steering: float) -> float:
     """Maps angle of steerig wheel to the steering angle of front right wheel."""
     return -0.0355 * steering * steering * steering + 0.0455 * steering * steering + 0.36 * steering
@@ -309,13 +260,13 @@ class TricycleModel(DynamicsModel):
     min_reg, max_reg = 0.1, 3
     reg_factor = jnp.max(vx_thresh - jnp.abs(vx), 0) / vx_thresh
     return min_reg + (max_reg - min_reg) * reg_factor
-  
+
   def _mu_y_front(self, v_y, v_x, reg):
-    return self._magic4p(self._sideslip(v_y=v_y, v_x=v_x, reg=reg), self.paj_params.front_paj)
-  
+    return self._magic4p(self._sideslip(v_y=v_y, v_x=v_x, reg=reg), self._paj_params.front_paj)
+
   def _mu_y_rear(self, v_y, v_x, taccx, reg):
-    mu_y = self._magic4p(self._sideslip(v_y=v_y, v_x=v_x, reg=reg), self.paj_params.rear_paj)
-    return self._capfactor(taccx, self.paj_params.rear_paj.D * _G) * mu_y
+    mu_y = self._magic4p(self._sideslip(v_y=v_y, v_x=v_x, reg=reg), self._paj_params.rear_paj)
+    return self._capfactor(taccx, self._paj_params.rear_paj.D * _G) * mu_y
 
   def _sideslip(self, v_y, v_x, reg):
     return jnp.atan2(v_y, jnp.fabs(v_x) + reg)  # (1 / capfactor(taccx, D2=D2)) *)
@@ -351,34 +302,23 @@ class TricycleModel(DynamicsModel):
     return y * 0.95
 
   def _RK4_update(self, action, state, dt):
-    '''
+    """
     Runge-Kutta 4th order integration
-    '''
+    """
     k1 = self._dynamics(action, state)
     k2 = self._dynamics(action, state + dt / 2 * k1)
     k3 = self._dynamics(action, state + dt / 2 * k2)
     k4 = self._dynamics(action, state + dt * k3)
     return state + dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
-  
+
   def _euler_forward(self, state, action, dt):
-    '''
+    """
     Euler forward integration
-    '''
+    """
     return state + dt * self._dynamics(state, action)
-  
-  def inverse():
-    pass
 
-if __name__ == '__main__':
-  # from waymax.config import GoKartGeometry, TricycleParams, PajieckaParams
-  from waymax.datatypes import Action, Trajectory
+  def inverse(self):
+    raise NotImplementedError
 
-  gk_geometry = GoKartGeometry()
-  model_params = TricycleParams()
-  paj_params = PajieckaParams()
-  tricycle = TricycleModel(gk_geometry, model_params, paj_params)
-  action = Action(data=jnp.array([0.1, 0.1, 0.1]), valid=jnp.array([True, True, True]))
-  trajectory = Trajectory.zeros((1,))
-  print(tricycle.compute_update(action, trajectory))
- 
-  
+
+

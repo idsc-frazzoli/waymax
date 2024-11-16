@@ -296,7 +296,7 @@ class Trajectory:
     )
 
 @chex.dataclass
-class GoKartTrajectory(Trajectory):
+class GokartTrajectory(Trajectory):
   yaw_rate: jax.Array
 
   @property
@@ -305,7 +305,7 @@ class GoKartTrajectory(Trajectory):
       return ['x', 'y', 'yaw', 'vel_x', 'vel_y', 'yaw_rate']
 
   @classmethod
-  def zeros(cls, shape: Sequence[int]) -> 'GoKartTrajectory':
+  def zeros(cls, shape: Sequence[int]) -> 'GokartTrajectory':
     """Creates a Trajectory containing zeros of the specified shape."""
     return cls(
         x=jnp.zeros(shape, jnp.float32),
