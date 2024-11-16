@@ -8,7 +8,7 @@ from absl.testing import parameterized
 
 from waymax import config as _config, datatypes
 from waymax.dynamics.tricycle_model import TricycleModel
-from waymax.env import GokartRacingEnvironment, GokartRacingDREnvironment
+from waymax.env import GokartRacingEnvironment
 from waymax.metrics.gokart_metric import GokartProgressMetric, GokartOrientationMetric, GokartOffroadMetric
 from waymax.utils.gokart_config import GoKartGeometry, PajieckaParams, TricycleParams
 from waymax.utils.gokart_utils import create_init_state

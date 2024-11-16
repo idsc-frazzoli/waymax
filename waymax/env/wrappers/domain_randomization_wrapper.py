@@ -44,7 +44,7 @@ class DomainRandomizationWrapper(EnvWrapper):
         Gaussian properties: consider centered gaussian, i.e. mu = 0, and some sigma defined in
         environment object.
         """
-        obs = self._wrapped_env.observe(state, rng)
+        obs = self._wrapped_env.observe(state)
         
         sigma_dist = self.sigma_xy * jnp.ones(shape=(11,))
 

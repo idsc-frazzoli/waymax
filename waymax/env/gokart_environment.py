@@ -62,7 +62,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         specs = BoundedArray((15,), jnp.float32, minimum, maximum)
         return specs
 
-    def observe(self, state: PlanningGoKartSimState, rng: Array) -> GokartObservation:
+    def observe(self, state: PlanningGoKartSimState) -> GokartObservation:
         """Computes the observation for the given simulation state.
 
         #todo
