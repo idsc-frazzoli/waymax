@@ -164,10 +164,12 @@ class TricycleModel(DynamicsModel):
 
     if self._normalize_actions:
       # scale back up if actions are normalized
-      act_min = -jnp.array([self._model_params.max_steering, self._model_params.max_accel, self._model_params.max_accel])
-      act_max = jnp.array([self._model_params.max_steering, self._model_params.max_accel, self._model_params.max_accel])
+      raw_act_min = -jnp.array([self._model_params.max_steering, self._model_params.max_accel, self._model_params.max_accel])
+      raw_act_max = jnp.array([self._model_params.max_steering, self._model_params.max_accel, self._model_params.max_accel])
+      act_min = self.action_spec().minimum
+      act_max = self.action_spec().maximum
       # convert normalized action [-1,1] to a real world action (eg acceleration [-6,-6])
-      action = act_min + (act_max - act_min)*action
+      action = raw_act_min + (raw_act_max - raw_act_min)*(action - act_min)/(act_max - act_min)
 
     # beta, AB_L, AB_R = jnp.split(action_array, 3, axis=-1)
     beta, AB_L, AB_R = action

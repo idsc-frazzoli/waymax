@@ -166,7 +166,7 @@ def create_init_state(num_timesteps=300) -> datatypes.GoKartSimState:
     We use the centerline as the sdc path (reference path)
     """
     # fixme can we simply create with batch 1 and then squeeze?
-    trajectory = datatypes.GoKartTrajectory.zeros((1, num_timesteps))  # 1 object, 200 time steps
+    trajectory = datatypes.GokartTrajectory.zeros((1, num_timesteps))  # 1 object, 200 time steps
     sim_trajectory = trajectory
     sim_trajectory.length = jnp.ones_like(sim_trajectory.length) * 1.5
     sim_trajectory.width = jnp.ones_like(sim_trajectory.width)
@@ -235,7 +235,7 @@ def create_batch_init_state(batch_size: int = 2, num_timesteps: int = 200) -> da
     create a GoKartSimState with batch_size
     """
     assert batch_size > 0
-    sim_trajectory = datatypes.GoKartTrajectory.zeros((batch_size, 1, num_timesteps))  # 1 object, 200 time steps
+    sim_trajectory = datatypes.GokartTrajectory.zeros((batch_size, 1, num_timesteps))  # 1 object, 200 time steps
     sim_trajectory.length = jnp.ones_like(sim_trajectory.length) * 1.5
     sim_trajectory.width = jnp.ones_like(sim_trajectory.width)
     sim_trajectory.height = jnp.ones_like(sim_trajectory.height)
