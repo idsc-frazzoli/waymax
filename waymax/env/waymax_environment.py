@@ -93,9 +93,10 @@ class WaymaxDrivingEnvironment(PlanningAgentEnvironment):
           Boolean array indicating if the episode should terminate
         """
         # fixme can be optimized to not recompute all the metrics
-        metric_dict = self.metrics(state)
-        is_offroad = metric_dict["offroad"].value.astype(jnp.bool)
-        is_overlap = metric_dict["overlap"].value.astype(jnp.bool)
-        condition = jnp.logical_or(is_offroad, state.is_done)
-        condition = jnp.logical_or(is_overlap, condition)
-        return condition.squeeze()
+        # metric_dict = self.metrics(state)
+        # is_offroad = metric_dict["offroad"].value.astype(jnp.bool)
+        # is_overlap = metric_dict["overlap"].value.astype(jnp.bool)
+        # condition = jnp.logical_or(is_offroad, state.is_done)
+        # condition = jnp.logical_or(is_overlap, condition)
+        # return condition.squeeze()
+        return state.is_done
