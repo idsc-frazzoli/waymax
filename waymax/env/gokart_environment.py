@@ -29,7 +29,7 @@ from jaxtyping import Float, jaxtyped
 from waymax import config as _config, datatypes, dynamics as _dynamics, rewards
 from waymax.agents import actor_core
 from waymax.env import typedefs as types, PlanningAgentEnvironment
-from waymax.utils.geometry import rotation_matrix
+from waymax.utils.geometry import rotation_matrix, wrap_yaws
 
 typechecker = beartype.beartype
 
@@ -157,6 +157,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         #     jax.debug.print("sdc_xy_curr: {}", sdc_xy_curr)
             distance_to_edge, _, debug_value = calculate_distances_to_boundary(sdc_xy_curr, sdc_yaw_curr, edge_points)
             # distance_to_edge = (distance_to_edge - 15) / 15 # normalize the distance to the track boundary
+            # distance_to_edge /= 30 # normalize the distance to the track boundary
         #     jax.debug.print("distance_to_edge: {}", distance_to_edge)
         #     jax.debug.breakpoint()
         else:
@@ -225,7 +226,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
             init_pos = state.sdc_paths.xy[..., 0, init_index, :]
             init_orint = state.sdc_paths.dir_xy[..., 0, init_index, :]
             init_yaw = jnp.arctan2(init_orint[..., 1], init_orint[..., 0])
-            init_velocity = jax.random.uniform(rng_v, (), minval=0.0, maxval=1)
+            init_velocity = jax.random.uniform(rng_v, (), minval=0.0, maxval=0.5)
             state.sim_trajectory.x = state.sim_trajectory.x.at[..., 0, 0].set(init_pos[0])
             state.sim_trajectory.y = state.sim_trajectory.y.at[..., 0, 0].set(init_pos[1])
             state.sim_trajectory.yaw = state.sim_trajectory.yaw.at[..., 0, 0].set(init_yaw)
@@ -310,6 +311,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         """
         # progression_reward = self._compute_progression_reward(last_state, state, dir_ref)
         # orientation_reward = self._compute_orientation_reward(state, dir_ref)
+        # # orientation_reward = 0.0
         # offroad_reward = self._compute_offroad_reward(state, done)
         # reward = progression_reward + orientation_reward + offroad_reward
         # reward_dict = {
@@ -317,7 +319,6 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         #         "gokart_orientation": orientation_reward,
         #         "gokart_offroad": offroad_reward
         # }
-        # reward = orientation_reward
         agent_mask = datatypes.get_control_mask(
           state.object_metadata, self.config.controlled_object
         )
@@ -451,7 +452,7 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
         movement_vector = sdc_xy_curr - sdc_xy_last
         movement_vector /= jnp.linalg.norm(movement_vector) # normalize the movement vector
         progress = jnp.where(
-          jnp.dot(movement_vector, dir_ref) > 0.7, # ~= cos45 around 45 degree
+          jnp.dot(movement_vector, dir_ref.squeeze(-2)) > 0.7, # ~= cos45 around 45 degree
           progress,
           0) # no reward if the self-driving car is moving in the wrong direction (TODO:signed progression reward?)
         path_length = state.sdc_paths.arc_length[..., 0, -1]
@@ -490,11 +491,17 @@ class GokartRacingEnvironment(PlanningAgentEnvironment):
                 state.object_metadata.is_sdc,
                 keepdims=False,
         )
-        yaw_vec = jnp.array([jnp.cos(sdc_yaw_curr), jnp.sin(sdc_yaw_curr)])  # (..., 2)
-        orientation_reward = jnp.dot(yaw_vec, dir_ref)  # (...,)
-        orientation_reward *= jnp.sign(sdc_vel_curr[0])  # (...,)
-        orientation_reward *= 0.05
-        orientation_reward = jnp.clip(orientation_reward, -0.05, 0.05)
+        yaw_ref = wrap_yaws(jnp.arctan2(dir_ref.squeeze(-2)[..., 1], dir_ref.squeeze(-2)[..., 0]))  # (...,)
+        # yaw_vector = jnp.array([jnp.cos(sdc_yaw_curr), jnp.sin(sdc_yaw_curr)])  # (..., 2)
+        dir_diff = jnp.abs(wrap_yaws(yaw_ref - sdc_yaw_curr))  # (...,)
+        # encourage the car to move in the direction of the reference track(centerline)
+        # orientation_reward = jnp.dot(yaw_vector, dir_ref)  # (...,)
+        # orientation_reward = jnp.where(orientation_reward > 0, orientation_reward, 0)
+        orientation_reward = jnp.exp(-dir_diff ** 2 / 0.5)
+        # scaled by the velocity, negative if the car is moving in the opposite direction
+        orientation_reward *= jnp.tanh(sdc_vel_curr[0])  # (...,) vx
+        #az: maybe tanh instead of clipping?
+        orientation_reward = jnp.clip(orientation_reward, -1, 1)*0.05 # 0.05
         return orientation_reward
     
     def _compute_offroad_reward(self, state: PlanningGoKartSimState, done) -> jnp.ndarray:
