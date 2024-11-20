@@ -171,23 +171,23 @@ def plot_numpy_bounding_boxes(
 
     # Draw bboxes.
     ax.plot(
-        [tl[0, :], tr[0, :], br[0, :], bl[0, :], tl[0, :]],
-        [tl[1, :], tr[1, :], br[1, :], bl[1, :], tl[1, :]],
+        [tl[0, :], tr[0, :], br[0, :], bl[0, :], tl[0, :], cl[0, :], cr[0, :], cf[0, :], cl[0, :]],
+        [tl[1, :], tr[1, :], br[1, :], bl[1, :], tl[1, :], cl[1, :], cr[1, :], cf[1, :], cl[1, :]],
         color=color,
         zorder=4,
         alpha=alpha,
         label=label,
     )
 
-    # Draw heading arrow.
-    ax.plot(
-        [cl[0, :], cr[0, :], cf[0, :], cl[0, :]],
-        [cl[1, :], cr[1, :], cf[1, :], cl[1, :]],
-        color=color,
-        zorder=4,
-        alpha=alpha,
-        label=label,
-    )
+    # # Draw heading arrow.
+    # ax.plot(
+    #     [cl[0, :], cr[0, :], cf[0, :], cl[0, :]],
+    #     [cl[1, :], cr[1, :], cf[1, :], cl[1, :]],
+    #     color=color,
+    #     zorder=4,
+    #     alpha=alpha,
+    #     label=label,
+    # )
 
 def plot_numpy_rays(
     ax: plt.Axes,
