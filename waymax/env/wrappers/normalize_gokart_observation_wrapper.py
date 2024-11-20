@@ -36,7 +36,32 @@ class NormalizeGokartObservationWrapper(EnvWrapper):
           wrapped_env: Waymax-like environment to wrap with the Brax interface
         """
         super().__init__(wrapped_env)
-
+        # min of all obs
+        self.min = jnp.array([-2., -2., -2.,-jnp.pi,
+                              0., 0.,0., 0.,0., 0.,0., 0.,0., 0.,0.])
+        self.max = jnp.array([10, 2, 2, jnp.pi,
+                              30.,30.,30.,30.,30.,30.,30.,30.,30.,30.,30.])
+        
+    def observe(self, state: datatypes.SimulatorState, rng: Array) -> GokartObservation:
+        obs = self._wrapped_env.observe(state, rng)
+        
+        obs_norm_flattened = jnp.divide(
+            jnp.subtract(obs.flatten(), self.min),
+            jnp.subtract(self.max,self.min)
+        )
+        
+        obs_norm = GokartObservation(
+            vel_x=jnp.array([obs_norm_flattened[0]]),  # doing this for shape
+            vel_y=jnp.array([obs_norm_flattened[1]]),
+            vel_r=jnp.array([obs_norm_flattened[2]]),
+            dir_diff=jnp.array([obs_norm_flattened[3]]),
+            dist_to_edge=obs_norm_flattened[4:],
+        )
+        
+        
+        return obs_norm
+        
+"""
     def observe(self, state: datatypes.SimulatorState, rng: Array) -> GokartObservation:
         obs = self._wrapped_env.observe(state, rng)
         
@@ -81,3 +106,4 @@ class NormalizeGokartObservationWrapper(EnvWrapper):
         )
 
         return obs_norm
+"""
