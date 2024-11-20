@@ -6,6 +6,7 @@ from waymax import datatypes
 from waymax.env import PlanningAgentEnvironment, PlanningAgentSimulatorState
 from waymax.datatypes.observation import sdc_observation_from_state
 from waymax.utils import geometry
+from dm_env.specs import BoundedArray
 
 class WaymaxDrivingEnvironment(PlanningAgentEnvironment):
     """
@@ -37,35 +38,64 @@ class WaymaxDrivingEnvironment(PlanningAgentEnvironment):
                 axis=-1)
         return obs
 
-    def reset(self, state: datatypes.SimulatorState, rng: jax.Array | None = None) -> Tuple[jax.Array, PlanningAgentSimulatorState]:
-        state = super().reset(state, rng)
-        obs = self.observe(state)
+    # def reset(self, state: datatypes.SimulatorState, rng: jax.Array | None = None) -> Tuple[jax.Array, PlanningAgentSimulatorState]:
+    #     state = super().reset(state, rng)
+    #     obs = self.observe(state)
 
-        return obs, state
+    #     return obs, state
     
-    def step(
-            self, state: PlanningAgentSimulatorState, action: datatypes.Action, rng: jax.Array | None = None
-    ) -> Tuple[jax.Array, PlanningAgentSimulatorState, jax.Array, bool, ]:
-        last_state = copy.deepcopy(state)
-        new_state = super().step(last_state, action, rng)
-        reward = super().reward(last_state, action)
-        metrics = super().metrics(last_state)
-        # TODO: (tian)
-        reward_dict = {
-            "progression_reward": metrics['log_divergence'].value,
-            "orientation_reward": metrics['overlap'].value,
-            "offroad_reward": metrics['offroad'].value
-        }
-        obs = self.observe(new_state)
-        done = new_state.is_done
-        # done = jnp.logical_or(new_state.is_done, metrics['overlap'].value==1)
-        # done = jnp.logical_or(done, metrics['offroad'].value==1)
-        obs, new_state = jax.lax.cond(
-            done,
-            lambda _: self.reset(new_state),
-            lambda _: (obs, new_state),
-            operand=None
-        )
-        info = reward_dict
+    # def step(
+    #         self, state: PlanningAgentSimulatorState, action: datatypes.Action, rng: jax.Array | None = None
+    # ) -> Tuple[jax.Array, PlanningAgentSimulatorState, jax.Array, bool, ]:
+    #     last_state = copy.deepcopy(state)
+    #     new_state = super().step(last_state, action, rng)
+    #     reward = super().reward(last_state, action)
+    #     metrics = super().metrics(last_state)
+    #     # TODO: (tian)
+    #     reward_dict = {
+    #         "progression_reward": metrics['log_divergence'].value,
+    #         "orientation_reward": metrics['overlap'].value,
+    #         "offroad_reward": metrics['offroad'].value
+    #     }
+    #     obs = self.observe(new_state)
+    #     done = new_state.is_done
+    #     # done = jnp.logical_or(new_state.is_done, metrics['overlap'].value==1)
+    #     # done = jnp.logical_or(done, metrics['offroad'].value==1)
+    #     obs, new_state = jax.lax.cond(
+    #         done,
+    #         lambda _: self.reset(new_state),
+    #         lambda _: (obs, new_state),
+    #         operand=None
+    #     )
+    #     info = reward_dict
 
-        return jax.lax.stop_gradient(obs), jax.lax.stop_gradient(new_state), reward, done, info
+    #     return jax.lax.stop_gradient(obs), jax.lax.stop_gradient(new_state), reward, done, info
+    
+    def observation_spec(self) -> BoundedArray:
+        # TODO: (tian) find a proper place to define obs_dim
+        dim = 236
+        minimum = -jnp.array([jnp.inf] * dim)
+        maximum = jnp.array([jnp.inf] * dim)
+        specs = BoundedArray((dim,), jnp.float32, minimum, maximum)
+        return specs
+    
+    def action_spec(self) -> BoundedArray:
+        data_spec = self.dynamics.action_spec()
+        return data_spec
+    
+    def termination(self, state: PlanningAgentSimulatorState) -> jax.Array:
+        """reset the environment if the self-driving car is off-road or the episode is done
+
+        Args:
+          state: The current state of the simulator
+
+        Returns:
+          Boolean array indicating if the episode should terminate
+        """
+        # fixme can be optimized to not recompute all the metrics
+        metric_dict = self.metrics(state)
+        is_offroad = metric_dict["offroad"].value.astype(jnp.bool)
+        is_overlap = metric_dict["overlap"].value.astype(jnp.bool)
+        condition = jnp.logical_or(is_offroad, state.is_done)
+        condition = jnp.logical_or(is_overlap, condition)
+        return condition.squeeze()

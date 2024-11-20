@@ -188,3 +188,43 @@ def plot_numpy_bounding_boxes(
         alpha=alpha,
         label=label,
     )
+
+def plot_numpy_rays(
+    ax: plt.Axes,
+    position: np.ndarray,
+    yaw: np.ndarray,
+    color: np.ndarray,
+    rays_length: np.ndarray,
+    num_rays: int = 11,
+    alpha: Optional[float] = 1.0,
+) -> None:
+    """
+    Plots rays originating from a given position and orientation.
+
+    Args:
+        ax: Matplotlib axis to draw on.
+        position: Array of shape (2,), representing the start position (x, y) of the rays.
+        yaw: Array of shape (1,), representing the orientation angle of the source in radians.
+        color: Array of shape (3,), representing the RGB color for the rays.
+        rays_length: Array of shape (num_rays,), representing the length of each ray.
+        num_rays: Number of rays to cast in the range of [-pi/2, pi/2] relative to the orientation.
+        alpha: Alpha value for drawing, where 0 is fully transparent.
+    """
+    
+    # Calculate angles for each ray relative to the orientation of the source.
+    angles = np.linspace(-np.pi / 2, np.pi / 2, num_rays) + yaw
+    
+    # Calculate the end points of each ray based on the angle and length.
+    for i, angle in enumerate(angles):
+        end_x = position[0] + rays_length[i] * np.cos(angle)
+        end_y = position[1] + rays_length[i] * np.sin(angle)
+        
+        # Draw each ray from the start position to the calculated end position.
+        ax.plot(
+            [position[0], end_x],
+            [position[1], end_y],
+            color=color,
+            alpha=alpha,
+            zorder=4,
+            linewidth=0.5,
+        )
