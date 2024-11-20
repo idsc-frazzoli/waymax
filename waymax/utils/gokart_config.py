@@ -1,8 +1,15 @@
+from enum import Enum
 import chex
 from chex import dataclass
 from dataclasses import field
 from jax import Array, numpy as jnp
 from jaxtyping import Float
+
+
+class TricycleDynamicsType(Enum):
+    ORIGINAL = "original"
+    FORCES = "forces"
+    IGNITION = "ignition"
 
 
 @dataclass
@@ -11,28 +18,31 @@ class GoKartGeometry:
     l2: float = 0.47  # Distance from cog to rear tires
     w1: float = 0.94  # Distance between front Tires
     w2: float = 1.08  # Distance between rear Tires
-    h: float = 0.24   # Height of the cog
+    h: float = 0.24  # Height of the cog
     back2backaxle: float = 0.23  # Distance from the rear of the gokart to the back axle
     frontaxle2front: float = 0.33  # Distance from the front axle to the front of the kart
     wheel2border: float = 0.18  # Side distance between center of the wheel and external frame
     F2n: float = l1 / (l1 + l2)  # Normal force at the rear axle "portion of Mass supported by rear tire"
-    m: float = field(init=False)  # Mass kg of the gokart
+    drag_a: float = 1  # Drag area, m^2
+    drag_c: float = 0.6  # Drag coefficient unitless
+    m: float = field(init=False)  # Mass kg of the gokart with driver
     l: float = field(init=False)  # Distance from front to rear axle (equal to l1 + l2)
-    
+
     def __post_init__(self):
-        self.l = self.l1 + self.l2
-        # With the current dynamics from the forces pro solver, the mass will cancel out 
-        # in the formulas, so changing the mass will not affect the results,
-        # but keeping it here for reference with the formulas of the forces pro model.
-        self.m = 335
+        self.l = self.l1 + self.l2 # m
+        # With the forces and original dynamics , the mass will cancel out
+        # in the formulas, so changing the mass will not affect the results.
+        # However, the ignition dynamics requires a mass.
+        self.m = 360  # kg
 
 
 @dataclass
 class TricycleParams:
+    dynamics_model: TricycleDynamicsType = TricycleDynamicsType.FORCES  # Actual dynamics model to use
     Iz: float = 0.7  # Inertia around the z axis
     REG_: float = 0.1  # Regularization factor for v_x for sideslip angle estimation
-    max_accel: float = 6.0
-    max_steering: float = 1.0  # 0.3
+    max_accel: float = 2.5  # of an individual wheel, gokart max acc is double this value m/s^2
+    max_steering: float = 1.57  # radians
 
 
 @dataclass
@@ -48,6 +58,35 @@ class PajieckaParams:
         C: float = 1.27
         D: float = 0.97
         E: float = 0.21
+
+
+@dataclass
+class PacejkaParamsIgnition:
+    class front_lateral:
+        D1y: float = -2.77e-5
+        D2y: float = 0.7
+        By: float = 17.17
+        Cy: float = 1.26
+        Ey: float = 0.42
+
+    class rear_lateral:
+        D1y: float = -1.1e-4
+        D2y: float = 1.21
+        By: float = 13.02
+        Cy: float = 1.27
+        Ey: float = 0.21
+        ByG: float = 2.65
+        CyG: float = 0.94
+
+    class rear_longitudinal:
+        D1x: float = -1.52e-4
+        D2x: float = 0.74
+        Bx: float = 24
+        Cx: float = 1.22
+        Ex: float = 0.91
+        BxG: float = 15
+        CxG: float = 0.8
+
 
 
 @dataclass

@@ -125,6 +125,8 @@ class GoKartStateDynamics(StateDynamics):
         vel_x=action.data[..., 3:4],
         vel_y=action.data[..., 4:5],
         yaw_rate=action.data[..., 5:6],
+        acc_x=action.data[..., 6:7],
+        acc_y=action.data[..., 7:8],
         valid=action.valid,
     )
   
