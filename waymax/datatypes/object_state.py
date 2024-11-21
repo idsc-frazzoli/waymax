@@ -296,16 +296,18 @@ class Trajectory:
     )
 
 @chex.dataclass
-class GoKartTrajectory(Trajectory):
+class GokartTrajectory(Trajectory):
+  acc_x: jax.Array
+  acc_y: jax.Array
   yaw_rate: jax.Array
-
+  
   @property
   def controllable_fields(self) -> Sequence[str]:
       """Returns the fields that are controllable."""
-      return ['x', 'y', 'yaw', 'vel_x', 'vel_y', 'yaw_rate']
+      return ['x', 'y', 'yaw', 'vel_x', 'vel_y', 'yaw_rate', 'acc_x', 'acc_y']
 
   @classmethod
-  def zeros(cls, shape: Sequence[int]) -> 'GoKartTrajectory':
+  def zeros(cls, shape: Sequence[int]) -> 'GokartTrajectory':
     """Creates a Trajectory containing zeros of the specified shape."""
     return cls(
         x=jnp.zeros(shape, jnp.float32),
@@ -315,6 +317,8 @@ class GoKartTrajectory(Trajectory):
         vel_y=jnp.zeros(shape, jnp.float32),
         yaw=jnp.zeros(shape, jnp.float32),
         yaw_rate=jnp.zeros(shape, jnp.float32),
+        acc_x=jnp.zeros(shape, jnp.float32),
+        acc_y=jnp.zeros(shape, jnp.float32),
         valid=jnp.zeros(shape, jnp.bool_),
         length=jnp.zeros(shape, jnp.float32),
         width=jnp.zeros(shape, jnp.float32),
@@ -332,6 +336,8 @@ class GoKartTrajectory(Trajectory):
         self.vel_y,
         self.yaw,
         self.yaw_rate,
+        self.acc_x,
+        self.acc_y,
         self.valid,
         self.timestamp_micros,
         self.length,
@@ -347,6 +353,8 @@ class GoKartTrajectory(Trajectory):
             self.vel_y,
             self.yaw,
             self.yaw_rate,
+            self.acc_x,
+            self.acc_y,
             self.valid,
             self.timestamp_micros,
             self.length,
@@ -354,6 +362,8 @@ class GoKartTrajectory(Trajectory):
             self.height,
         ],
         [
+            jnp.float32,
+            jnp.float32,
             jnp.float32,
             jnp.float32,
             jnp.float32,
