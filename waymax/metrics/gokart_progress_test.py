@@ -6,12 +6,12 @@ import tensorflow as tf
 
 from absl.testing import parameterized
 
+from gocarx.metrics.gokart_progress import GokartProgressMetric
 from waymax import config as _config, datatypes
-from waymax.dynamics.tricycle_model import TricycleModel
-from waymax.env import GokartRacingEnvironment
-from waymax.metrics.gokart_metric import GokartProgressMetric, GokartOrientationMetric, GokartOffroadMetric
-from waymax.utils.gokart_config import GoKartGeometry, PajieckaParams, TricycleParams
-from waymax.utils.gokart_utils import create_init_state
+from gocarx.dynamics.tricycle_model import TricycleModel
+from gocarx.env import GokartRacingEnvironment
+from gocarx.dynamics.gokart_config import GoKartGeometry, PajieckaParams, TricycleParams
+from gocarx.utils.gokart_utils import create_init_state
 
 class GokartProgressMetricTest(tf.test.TestCase, parameterized.TestCase):
     def test_progress_without_stepping(self):
@@ -97,68 +97,3 @@ class GokartProgressMetricTest(tf.test.TestCase, parameterized.TestCase):
         new_state = env.step(state, action=action)
         result = metric.compute(new_state)
         self.assertGreater(result.value, 0.5)
-
-class GokartOrientationMetricTest(tf.test.TestCase, parameterized.TestCase):
-    def test_zero_velocity(self):
-        metric = GokartOrientationMetric()
-        state = create_init_state(num_timesteps=100)
-        result = metric.compute(state)
-        # should be zero, because the velocity is zero
-        self.assertEqual(result.value, 0.0)
-    
-    def test_correct_orientation(self):
-        metric = GokartOrientationMetric()
-        state = create_init_state(num_timesteps=100)
-        # set a velocity, so that the orientation reward is not zero
-        state.sim_trajectory.vel_x = state.sim_trajectory.vel_x.at[..., 0, 0].set(1)
-        result = metric.compute(state)
-        self.assertGreater(result.value, 0.0)
-
-    def test_negative_velocity(self):
-        metric = GokartOrientationMetric()
-        state = create_init_state(num_timesteps=100)
-        # set a velocity, so that the orientation reward is not zero
-        state.sim_trajectory.vel_x = state.sim_trajectory.vel_x.at[..., 0, 0].set(-1)
-        result = metric.compute(state)
-        self.assertLess(result.value, 0.0)
-
-    def test_wrong_orientation(self):
-        metric = GokartOrientationMetric()
-        state = create_init_state(num_timesteps=100)
-        state.sim_trajectory.vel_x = state.sim_trajectory.vel_x.at[..., 0, 0].set(-1)
-        # shape: (..., num_objects, timesteps=1) -> (..., num_objects)
-        yaw = state.current_sim_trajectory.yaw[..., 0]
-
-        sdc_yaw_curr = datatypes.select_by_onehot(
-                yaw,
-                state.object_metadata.is_sdc,
-                keepdims=False,
-        )
-        wrong_orientation = sdc_yaw_curr + jnp.pi
-        state.sim_trajectory.yaw = state.sim_trajectory.yaw.at[..., 0, 0].set(wrong_orientation)
-        result = metric.compute(state)
-        self.assertEqual(result.value, 0.0)
-
-
-class GokartOffroadMetricTest(tf.test.TestCase, parameterized.TestCase):
-    def test_onroad(self):
-        metric = GokartOffroadMetric()
-        state = create_init_state(num_timesteps=100)
-        result = metric.compute(state)
-        # should be zero, because the car is not offroad
-        self.assertEqual(result.value, 0.0)
-
-    def test_offroad(self):
-        metric = GokartOffroadMetric()
-        state = create_init_state(num_timesteps=100)
-        current_y = state.current_sim_trajectory.x[..., 0, 0]
-        # move the car offroad
-        current_y -= 2 
-        state.sim_trajectory.y = state.sim_trajectory.y.at[..., 0, 0].set(current_y)
-        result = metric.compute(state)
-        # should be negative, because the car is offroad
-        self.assertEqual(result.value, 1.0)
-
-
-if __name__ == '__main__':
-  tf.test.main()

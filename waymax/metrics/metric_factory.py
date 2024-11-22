@@ -23,7 +23,9 @@ from waymax.metrics import imitation
 from waymax.metrics import overlap
 from waymax.metrics import roadgraph
 from waymax.metrics import route
-from waymax.metrics import gokart_metric
+from waymax.metrics import gokart_progress
+from waymax.metrics import gokart_offroad
+from waymax.metrics import gokart_orientation
 
 
 _METRICS_REGISTRY: dict[str, abstract_metric.AbstractMetric] = {
@@ -34,9 +36,9 @@ _METRICS_REGISTRY: dict[str, abstract_metric.AbstractMetric] = {
     'sdc_wrongway': roadgraph.WrongWayMetric(),
     'sdc_progression': route.ProgressionMetric(),
     'sdc_off_route': route.OffRouteMetric(),
-    'gokart_progress': gokart_metric.GokartProgressMetric(),
-    'gokart_orientation': gokart_metric.GokartOrientationMetric(),
-    'gokart_offroad': gokart_metric.GokartOffroadMetric(),
+    'gokart_progress': gokart_progress.GokartProgressMetric(),
+    'gokart_orientation': gokart_orientation.GokartOrientationMetric(),
+    'gokart_offroad': gokart_offroad.GokartOffroadMetric(),
 }
 
 
