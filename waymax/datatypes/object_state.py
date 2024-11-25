@@ -297,10 +297,10 @@ class Trajectory:
 
 @chex.dataclass
 class GokartTrajectory(Trajectory):
+  yaw_rate: jax.Array
   acc_x: jax.Array
   acc_y: jax.Array
-  yaw_rate: jax.Array
-  
+
   @property
   def controllable_fields(self) -> Sequence[str]:
       """Returns the fields that are controllable."""
