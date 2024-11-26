@@ -50,6 +50,7 @@ def test_norm_wrapper():
     assert isinstance(obs_norm, GokartObservation), "Object is not of type GokartObservation"
     # Ensure the noisy observation is not the same as the original observation
     assert not jnp.array_equal(obs_original, obs_norm.flatten()), "Observations are the same, but they should not be."
+    # assert jnp.all((obs_norm.flatten() >= 0) & (obs_norm.flatten() <= 1)), "Array contains values outside the interval [0,1]."
 
 if __name__ == "__main__":
     test_norm_wrapper()

@@ -45,26 +45,19 @@ class NormalizeGokartObservationWrapper(EnvWrapper):
     def observe(self, state: datatypes.SimulatorState, rng: Array) -> GokartObservation:
         obs = self._wrapped_env.observe(state, rng)
         
-        obs_norm_flattened = jnp.divide(
-            jnp.subtract(obs.flatten(), self.min),
-            jnp.subtract(self.max,self.min)
-        )
+        ### NORMALIZE OBSERVATIONS
+        # standardize
+        obs_standardized = self.standardize_obs(obs)
         
-        obs_norm = GokartObservation(
-            vel_x=jnp.array([obs_norm_flattened[0]]),  # doing this for shape
-            vel_y=jnp.array([obs_norm_flattened[1]]),
-            vel_r=jnp.array([obs_norm_flattened[2]]),
-            dir_diff=jnp.array([obs_norm_flattened[3]]),
-            dist_to_edge=obs_norm_flattened[4:],
-        )
-        
+        # clipping
+        obs_clipped = self.clip_obs(obs_standardized, -5, 5)
+    
+        # rescale
+        obs_norm = self.rescale_obs(obs_clipped, 2, 1)
         
         return obs_norm
         
-"""
-    def observe(self, state: datatypes.SimulatorState, rng: Array) -> GokartObservation:
-        obs = self._wrapped_env.observe(state, rng)
-        
+    def standardize_obs(self, obs: GokartObservation) -> GokartObservation:        
         norm_state = NormalizeGokartObsEnvState(
             mean=jnp.zeros_like(obs.flatten()),
             var=jnp.ones_like(obs.flatten()),
@@ -95,8 +88,6 @@ class NormalizeGokartObservationWrapper(EnvWrapper):
         
         obs_norm_flattened = (obs.flatten() - norm_state.mean) / jnp.sqrt(norm_state.var + 1e-8)
         
-        # fixme like this it stays invariant to changes of obs dim in
-        # distance to edge, but not anything else
         obs_norm = GokartObservation(
             vel_x=jnp.array([obs_norm_flattened[0]]),  # doing this for shape
             vel_y=jnp.array([obs_norm_flattened[1]]),
@@ -106,4 +97,35 @@ class NormalizeGokartObservationWrapper(EnvWrapper):
         )
 
         return obs_norm
-"""
+    
+    
+    def clip_obs(self, obs: GokartObservation, clip_min: int, clip_max: int) -> GokartObservation:
+        
+        obs_clipped_flattened = jnp.clip(obs.flatten(), clip_min, clip_max)
+        
+        obs_clipped = GokartObservation(
+            vel_x=jnp.array([obs_clipped_flattened[0]]),  # doing this for shape
+            vel_y=jnp.array([obs_clipped_flattened[1]]),
+            vel_r=jnp.array([obs_clipped_flattened[2]]),
+            dir_diff=jnp.array([obs_clipped_flattened[3]]),
+            dist_to_edge=obs_clipped_flattened[4:],
+        )
+        
+        return obs_clipped
+    
+    
+    def rescale_obs(self, obs: GokartObservation, scale_factor: float, scale_shifter: float) -> GokartObservation:
+        obs_rescaled_flattened = scale_factor * jnp.divide(
+                jnp.subtract(obs.flatten(), self.min),
+                jnp.subtract(self.max,self.min)
+            ) - scale_shifter
+            
+        obs_rescaled = GokartObservation(
+            vel_x=jnp.array([obs_rescaled_flattened[0]]),  # doing this for shape
+            vel_y=jnp.array([obs_rescaled_flattened[1]]),
+            vel_r=jnp.array([obs_rescaled_flattened[2]]),
+            dir_diff=jnp.array([obs_rescaled_flattened[3]]),
+            dist_to_edge=obs_rescaled_flattened[4:],
+        )
+        
+        return obs_rescaled
