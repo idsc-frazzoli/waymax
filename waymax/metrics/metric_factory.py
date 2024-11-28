@@ -26,19 +26,32 @@ from waymax.metrics import route
 from waymax.metrics import gokart_progress
 from waymax.metrics import gokart_offroad
 from waymax.metrics import gokart_orientation
+from waymax.metrics import gokart_action
+from waymax.metrics import gokart_state
 
 
 _METRICS_REGISTRY: dict[str, abstract_metric.AbstractMetric] = {
-    'log_divergence': imitation.LogDivergenceMetric(),
-    'overlap': overlap.OverlapMetric(),
-    'offroad': roadgraph.OffroadMetric(),
-    'kinematic_infeasibility': comfort.KinematicsInfeasibilityMetric(),
-    'sdc_wrongway': roadgraph.WrongWayMetric(),
-    'sdc_progression': route.ProgressionMetric(),
-    'sdc_off_route': route.OffRouteMetric(),
-    'gokart_progress': gokart_progress.GokartProgressMetric(),
-    'gokart_orientation': gokart_orientation.GokartOrientationMetric(),
-    'gokart_offroad': gokart_offroad.GokartOffroadMetric(),
+    "log_divergence": imitation.LogDivergenceMetric(),
+    "overlap": overlap.OverlapMetric(),
+    "offroad": roadgraph.OffroadMetric(),
+    "kinematic_infeasibility": comfort.KinematicsInfeasibilityMetric(),
+    "sdc_wrongway": roadgraph.WrongWayMetric(),
+    "sdc_progression": route.ProgressionMetric(),
+    "sdc_off_route": route.OffRouteMetric(),
+    "gokart_progress": gokart_progress.GokartProgressMetric(),
+    "gokart_orientation": gokart_orientation.GokartOrientationMetric(),
+    "gokart_offroad": gokart_offroad.GokartOffroadMetric(),
+    "gokart_almost_offroad": gokart_offroad.GokartOffroadMetric(0.2),
+    "gokart_vel_x": gokart_state.GokartStateKernelMetric("vel_x"),
+    "gokart_vel_y": gokart_state.GokartStateKernelMetric("vel_y"),
+    "gokart_vel_x_out_range": gokart_state.GokartStateOutRangeMetric("vel_x", -2.0, 6.0),
+    "gokart_action": gokart_action.GokartActionKernelMetric(),
+    "gokart_steer_action": gokart_action.GokartActionKernelMetric([0]),
+    "gokart_throttle_action": gokart_action.GokartActionKernelMetric([1, 2]),
+    "gokart_tv_action": gokart_action.GokartActionTVKernelMetric(),
+    "gokart_action_rate": gokart_action.GokartActionRateKernelMetric(),
+    "gokart_steer_action_rate": gokart_action.GokartActionRateKernelMetric([0]),
+    "gokart_throttle_action_rate": gokart_action.GokartActionRateKernelMetric([1, 2]),
 }
 
 
@@ -46,45 +59,50 @@ def run_metrics(
     simulator_state: datatypes.SimulatorState,
     metrics_config: _config.MetricsConfig,
 ) -> dict[str, abstract_metric.MetricResult]:
-  """Runs all metrics with config flags set to True.
+    """Runs all metrics with config flags set to True.
 
-  User-defined metrics must be registered using the `register_metric` function.
+    User-defined metrics must be registered using the `register_metric` function.
 
-  Args:
-    simulator_state: The current simulator state of shape (...).
-    metrics_config: Waymax metrics config.
+    Args:
+      simulator_state: The current simulator state of shape (...).
+      metrics_config: Waymax metrics config.
 
-  Returns:
-    A dictionary of metric names mapping to metric result arrays where each
-      metric is of shape (..., num_objects).
-  """
-  results = {}
-  for metric_name in metrics_config.metrics_to_run:
-    if metric_name in _METRICS_REGISTRY:
-      results[metric_name] = _METRICS_REGISTRY[metric_name].compute(
-          simulator_state
-      )
-    else:
-      raise ValueError(f'Metric {metric_name} not registered.')
+    Returns:
+      A dictionary of metric names mapping to metric result arrays where each
+        metric is of shape (..., num_objects).
+    """
+    results = {}
+    for metric_name in metrics_config.metrics_to_run:
+        if metric_name in _METRICS_REGISTRY:
+            results[metric_name] = _METRICS_REGISTRY[metric_name].compute(simulator_state)
+        else:
+            raise ValueError(f"Metric {metric_name} not registered.")
 
-  return results
+    return results
 
 
-def register_metric(metric_name: str, metric: abstract_metric.AbstractMetric):
-  """Register a metric.
+def register_metric(metric_name: str, metric: abstract_metric.AbstractMetric, exist_ok: bool = False):
+    """Register a metric.
 
-  This function registers a metric so that it can be included in a MetricsConfig
-  and computed by `run_metrics`.
+    This function registers a metric so that it can be included in a MetricsConfig
+    and computed by `run_metrics`.
 
-  Args:
-    metric_name: String name to register the metric with.
-    metric: The metric to register.
-  """
-  if metric_name in _METRICS_REGISTRY:
-    raise ValueError(f'Metric {metric_name} has already been registered.')
-  _METRICS_REGISTRY[metric_name] = metric
+    Args:
+      metric_name: String name to register the metric with.
+      metric: The metric to register.
+    """
+    if metric_name in _METRICS_REGISTRY and not exist_ok:
+        raise ValueError(f"Metric {metric_name} has already been registered.")
+    _METRICS_REGISTRY[metric_name] = metric
 
 
 def get_metric_names() -> Iterable[str]:
-  """Returns the names of all registered metrics."""
-  return _METRICS_REGISTRY.keys()
+    """Returns the names of all registered metrics."""
+    return _METRICS_REGISTRY.keys()
+
+
+def get_metric_type(metric_name: str) -> type[abstract_metric.AbstractMetric]:
+    """Returns the type of a registered metric given the metric name."""
+    if metric_name not in _METRICS_REGISTRY:
+        raise ValueError(f"Metric {metric_name} not registered.")
+    return _METRICS_REGISTRY[metric_name].__class__

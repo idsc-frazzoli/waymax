@@ -395,6 +395,9 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
     ).as_action()
     planning_agent_controlled = state.object_metadata.is_sdc
 
+    updated_history_actions = jnp.roll(state.history_actions, shift=1, axis=0)
+    updated_history_actions = updated_history_actions.at[0].set(action.data)
+
     merged_action = planning_agent_action
     merged_controlled = planning_agent_controlled
     # Do not control objects which are initialized in a overlap
@@ -444,6 +447,7 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
     return state.replace(
         sim_trajectory=new_traj,
         timestep=state.timestep + 1,
+        history_actions=updated_history_actions,
         sim_agent_actor_states=updated_sim_agent_actor_states,
     )
 

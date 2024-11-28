@@ -104,6 +104,7 @@ class OffroadMetric(abstract_metric.AbstractMetric):
 def is_offroad(
     trajectory: datatypes.Trajectory,
     roadgraph_points: datatypes.RoadgraphPoints,
+    safety_margin: float = 0.0,
 ) -> jax.Array:
   """Checks if the given trajectory is offroad.
 
@@ -119,6 +120,9 @@ def is_offroad(
     roadgraph_points: All of the roadgraph points in the run segment of shape
       (..., num_points). Roadgraph points of type `ROAD_EDGE_BOUNDARY` and
       `ROAD_EDGE_MEDIAN` are used to do the check.
+    safety_margin: The safety margin to consider a trajectory offroad. If the
+      distance to the road edge is less than this value, the trajectory is
+      considered offroad.
 
   Returns:
     agent_mask: a bool array with the shape (..., num_objects). The value is
@@ -152,7 +156,7 @@ def is_offroad(
   # Shape: (..., num_objects, num_corners=4).
   distances = jnp.reshape(distances, [*shape_prefix, num_agents, num_points])
   # Shape: (..., num_objects).
-  return jnp.any(distances > 0.0, axis=-1)
+  return jnp.any(distances > -safety_margin, axis=-1)
 
 
 def compute_signed_distance_to_nearest_road_edge_point(
