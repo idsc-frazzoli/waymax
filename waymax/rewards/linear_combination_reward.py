@@ -35,7 +35,7 @@ class LinearCombinationReward(abstract_reward_function.AbstractRewardFunction):
       simulator_state: datatypes.SimulatorState,
       action: datatypes.Action,
       agent_mask: jax.Array,
-      return_reward_dict: bool = False,
+      verbose_metric: bool = False,
   ) -> jax.Array:
     """Computes the reward as a linear combination of metrics.
 
@@ -54,14 +54,23 @@ class LinearCombinationReward(abstract_reward_function.AbstractRewardFunction):
     all_metrics = metrics.run_metrics(simulator_state, self._metrics_config)
 
     reward = jnp.zeros_like(agent_mask)
-    reward_dict = {}
     for reward_metric_name, reward_weight in self._config.rewards.items():
       metric_all_agents = all_metrics[reward_metric_name].masked_value()
       metric = metric_all_agents * agent_mask
-      reward_dict[reward_metric_name] = metric * reward_weight
       reward += metric * reward_weight
-    if return_reward_dict:
-      return reward, reward_dict
+
+    # copied from metrics() in PlanningAgentEnvironment
+    metric_dict = all_metrics
+    for metric_name in ('log_divergence', 'overlap', 'offroad'):
+      if metric_name in metric_dict:
+        one_metric_dict = {metric_name: metric_dict[metric_name]}
+        one_hot_metric = datatypes.select_by_onehot(
+            one_metric_dict, simulator_state.object_metadata.is_sdc, keepdims=False
+        )
+        metric_dict[metric_name] = one_hot_metric[metric_name]
+
+    if verbose_metric:
+      return reward, metric_dict
     else:
       return reward
 

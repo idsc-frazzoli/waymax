@@ -336,7 +336,7 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
 
   @jax.named_scope('PlanningAgentEnvironment.reward')
   def reward(
-      self, state: PlanningSimState, action: datatypes.Action
+      self, state: PlanningSimState, action: datatypes.Action, verbose: bool = False
   ) -> jax.Array:
     """Computes the reward for a transition.
 
@@ -355,12 +355,17 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
           state.object_metadata, self.config.controlled_object
       )
       multi_agent_reward = self._reward_function.compute(
-          state, action, agent_mask
+          state, action, agent_mask, verbose
       )
-      # After onehot, shape: (...)
-      return datatypes.select_by_onehot(
-          multi_agent_reward, state.object_metadata.is_sdc, keepdims=False
-      )
+      if not verbose:
+        # After onehot, shape: (...)
+        return datatypes.select_by_onehot(
+            multi_agent_reward, state.object_metadata.is_sdc, keepdims=False
+        )
+      else: 
+        return datatypes.select_by_onehot(
+            multi_agent_reward[0], state.object_metadata.is_sdc, keepdims=False
+        ), multi_agent_reward[1]
     else:
       reward_spec = specs.Array(shape=(), dtype=jnp.float32)
       return jnp.zeros(state.shape + reward_spec.shape, dtype=reward_spec.dtype)
