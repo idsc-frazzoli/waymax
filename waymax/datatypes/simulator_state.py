@@ -136,6 +136,9 @@ class GoKartSimState(SimulatorState):
     sdc_paths: Optional[route.GoKartPaths] = None
     history_actions: Optional[jax.Array] = None
 
+    def __eq__(self, other: Any) -> bool:
+      return operations.compare_all_leaf_nodes(self, other)
+
 def update_state_by_log(
     state: SimulatorState, num_steps: int
 ) -> SimulatorState:
@@ -151,6 +154,8 @@ def update_state_by_log(
           axis=-1,
       ),
   )
+
+
 
 
 def get_control_mask(
