@@ -22,7 +22,7 @@ class GokartStateKernelMetric(abstract_metric.AbstractMetric):
         self.state_attr_name = state_attr_name
         self.l_ord = l_ord
 
-    @jax.named_scope("GokartStateMetric.compute")
+    @jax.named_scope("GokartStateKernelMetric.compute")
     def compute(self, simulator_state: datatypes.GoKartSimState) -> MetricResult:
         """Computes a state metric.
 

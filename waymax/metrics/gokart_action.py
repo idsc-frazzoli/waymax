@@ -26,7 +26,7 @@ class GokartActionNormMetric(abstract_metric.AbstractMetric):
         self.action_idxs = action_idxs if action_idxs is not None else slice(None)
         self.l_ord = l_ord
 
-    @jax.named_scope("GokartActionMetric.compute")
+    @jax.named_scope("GokartActionNormMetric.compute")
     def compute(self, simulator_state: datatypes.GoKartSimState) -> MetricResult:
         """Computes the action metric.
 
@@ -57,7 +57,7 @@ class GokartActionKernelMetric(GokartActionNormMetric):
     def __init__(self, action_idxs: Optional[Sequence[int]] = None, l_ord: int = 2):
         super().__init__(action_idxs, l_ord)
 
-    @jax.named_scope("GokartActionMetric.compute")
+    @jax.named_scope("GokartActionKernelMetric.compute")
     def compute(self, simulator_state: datatypes.GoKartSimState) -> MetricResult:
         """Computes the action metric.
 
@@ -168,13 +168,13 @@ class GokartActionTVKernelMetric(abstract_metric.AbstractMetric):
         assert isinstance(l_ord, int)
         self.l_ord = l_ord
 
-    @jax.named_scope("GokartActionRateMetric.compute")
+    @jax.named_scope("GokartActionTVKernelMetric.compute")
     def compute(self, simulator_state: datatypes.GoKartSimState) -> MetricResult:
-        """Computes the action rate metric.
+        """Computes the action metric.
 
         Args:
           simulator_state: Updated simulator state to calculate metrics for. Will
-            compute the action rate metric for timestep `simulator_state.timestep`.
+            compute the TV action metric for timestep `simulator_state.timestep`.
 
         Returns:
           An array containing the metric result of the same shape as the input
