@@ -131,9 +131,12 @@ class SimulatorState:
   
 @chex.dataclass
 class GoKartSimState(SimulatorState):
-    sim_trajectory: object_state.GoKartTrajectory
-    log_trajectory: object_state.GoKartTrajectory
+    sim_trajectory: object_state.GokartTrajectory
+    log_trajectory: object_state.GokartTrajectory
     sdc_paths: Optional[route.GoKartPaths] = None
+
+    def __eq__(self, other: Any) -> bool:
+      return operations.compare_all_leaf_nodes(self, other)
 
 def update_state_by_log(
     state: SimulatorState, num_steps: int
@@ -150,6 +153,8 @@ def update_state_by_log(
           axis=-1,
       ),
   )
+
+
 
 
 def get_control_mask(
