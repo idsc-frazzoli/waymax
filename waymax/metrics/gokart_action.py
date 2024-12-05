@@ -44,8 +44,6 @@ class GokartActionMetric(abstract_metric.AbstractMetric):
           An array containing the metric result of the same shape as the input
             trajectories. The shape is (..., num_objects).
         """
-        print("history_actions", simulator_state.history_actions)
-        print("simulator_state.last_action", simulator_state.last_action)
         reward = MetricResult.create_and_validate(
             jax.lax.cond(
                 simulator_state.timestep > jnp.zeros_like(simulator_state.timestep),
@@ -95,14 +93,13 @@ class GokartActionRateMetric(abstract_metric.AbstractMetric):
             trajectories. The shape is (..., num_objects).
         """
 
-        action_attrs = simulator_state.last_N_actions(2).stack_fields(self.action_names)[..., :2, :]
         # jax.debug.print("ts {}, action_attrs {}", simulator_state.timestep, action_attrs)
         reward = MetricResult.create_and_validate(
             jax.lax.cond(
                 simulator_state.timestep > jnp.ones_like(simulator_state.timestep),
                 lambda x: jnp.sum(jnp.pow(jnp.abs(x[1] - x[0]), self.l_ord)),
                 lambda x: 0.0,
-                action_attrs,
+                simulator_state.last_N_actions(2).stack_fields(self.action_names)[..., :2, :].squeeze(0),
             ),
             jnp.ones(simulator_state.num_objects, dtype=jnp.bool_).squeeze(-1),
         )
@@ -110,7 +107,7 @@ class GokartActionRateMetric(abstract_metric.AbstractMetric):
         return reward
 
 
-class GokartActionTVMetric(abstract_metric.AbstractMetric):
+class GokartTVActionMetric(abstract_metric.AbstractMetric):
     """TV metric.
 
     This metric returns a l norm of the TV taken by the gokart.
@@ -128,7 +125,7 @@ class GokartActionTVMetric(abstract_metric.AbstractMetric):
         assert isinstance(l_ord, int)
         self.l_ord = l_ord
 
-    @jax.named_scope("GokartActionTVMetric.compute")
+    @jax.named_scope("GokartTVActionMetric.compute")
     def compute(self, simulator_state: datatypes.GoKartSimState) -> MetricResult:
         """Computes the action metric.
 
@@ -141,13 +138,12 @@ class GokartActionTVMetric(abstract_metric.AbstractMetric):
             trajectories. The shape is (..., num_objects).
         """
 
-        TV_attr = simulator_state.last_action.TV[..., 0]
         reward = MetricResult.create_and_validate(
             jax.lax.cond(
                 simulator_state.timestep > jnp.zeros_like(simulator_state.timestep),
                 lambda x: jnp.pow(jnp.abs(x), self.l_ord).squeeze(-1),
                 lambda x: 0.0,
-                TV_attr,
+                simulator_state.last_action.TV[..., 0],
             ),
             jnp.ones(simulator_state.num_objects, dtype=jnp.bool_).squeeze(-1),
         )

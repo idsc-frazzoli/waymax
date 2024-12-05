@@ -40,22 +40,23 @@ _METRICS_REGISTRY: dict[str, abstract_metric.AbstractMetric] = {
     "sdc_off_route": route.OffRouteMetric(),
     "gokart_progress": gokart_progress.GokartProgressMetric(),
     "gokart_orientation": gokart_orientation.GokartOrientationMetric(),
-    "gokart_offroad": gokart_offroad.GokartOffroadMetric(),
-    "gokart_almost_offroad": gokart_offroad.GokartOffroadMetric(0.2),
-    "gokart_distance_to_bounds": gokart_offroad.GokartDistanceToBoundsMetric(0.3),
-    "gokart_vel_x": gokart_state.GokartVelxKernelMetric(),
-    "gokart_vel_y": gokart_state.GokartVelyKernelMetric(),
-    "gokart_yaw_rate": gokart_state.GokartStateKernelMetric("yaw_rate"), # example of a custom metric
+    "gokart_offroad": gokart_offroad.GokartOffroadMetric(0.0),
+    "gokart_distance_to_bounds": gokart_offroad.GokartDistanceToBoundsMetric(0.3, -1),
+    "gokart_vel_x": gokart_state.GokartVelxMetric(),
+    "gokart_vel_y": gokart_state.GokartVelyMetric(),
+    "gokart_yaw_rate": gokart_state.GokartStateMetric("yaw_rate"),  # example of a custom metric
     "gokart_vel_x_out_range": gokart_state.GokartVelxOutRangeMetric(-2.0, 6.0),
-    "gokart_vel_y_out_range": gokart_state.GokartStateOutRangeMetric("vel_y", -3.0, 3.0), # example of a custom metric
+    "gokart_vel_y_out_range": gokart_state.GokartStateOutRangeMetric("vel_y", -3.0, 3.0),  # example of a custom metric
     "gokart_action": gokart_action.GokartActionMetric(),
     "gokart_steer_action": gokart_action.GokartActionMetric(["steering_angle"]),
     "gokart_throttle_action": gokart_action.GokartActionMetric(["AB_L", "AB_R"]),
-    "gokart_tv_action": gokart_action.GokartActionTVMetric(),
+    "gokart_tv_action": gokart_action.GokartTVActionMetric(),
     "gokart_action_rate": gokart_action.GokartActionRateMetric(),
     "gokart_steer_action_rate": gokart_action.GokartActionRateMetric(["steering_angle"]),
     "gokart_throttle_action_rate": gokart_action.GokartActionRateMetric(["AB_L", "AB_R"]),
 }
+
+import jax
 
 
 def run_metrics(
@@ -75,11 +76,12 @@ def run_metrics(
         metric is of shape (..., num_objects).
     """
     results = {}
-    for metric_name in metrics_config.metrics_to_run:
-        if metric_name in _METRICS_REGISTRY:
-            results[metric_name] = _METRICS_REGISTRY[metric_name].compute(simulator_state)
-        else:
-            raise ValueError(f"Metric {metric_name} not registered.")
+    with jax.profiler.trace("/tmp/jax-trace"):
+        for metric_name in metrics_config.metrics_to_run:
+            if metric_name in _METRICS_REGISTRY:
+                results[metric_name] = _METRICS_REGISTRY[metric_name].compute(simulator_state)
+            else:
+                raise ValueError(f"Metric {metric_name} not registered.")
 
     return results
 

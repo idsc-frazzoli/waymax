@@ -5,7 +5,7 @@ from waymax import datatypes
 from waymax.metrics import abstract_metric, MetricResult
 
 
-class GokartStateKernelMetric(abstract_metric.AbstractMetric):
+class GokartStateMetric(abstract_metric.AbstractMetric):
     """State metric.
 
     This metric returns a l kernel of a state of the gokart.
@@ -22,7 +22,7 @@ class GokartStateKernelMetric(abstract_metric.AbstractMetric):
         self.state_attr_name = state_attr_name
         self.l_ord = l_ord
 
-    @jax.named_scope("GokartStateKernelMetric.compute")
+    @jax.named_scope("GokartStateMetric.compute")
     def compute(self, simulator_state: datatypes.GoKartSimState) -> MetricResult:
         """Computes a state metric.
 
@@ -44,7 +44,7 @@ class GokartStateKernelMetric(abstract_metric.AbstractMetric):
         return reward.replace(value=jnp.squeeze(reward.value, axis=-1), valid=jnp.squeeze(reward.valid, axis=-1))
 
 
-class GokartVelxKernelMetric(abstract_metric.AbstractMetric):
+class GokartVelxMetric(abstract_metric.AbstractMetric):
     """State metric.
 
     This metric returns a l kernel of vel_x state of the gokart.
@@ -59,7 +59,7 @@ class GokartVelxKernelMetric(abstract_metric.AbstractMetric):
         assert isinstance(l_ord, int)
         self.l_ord = l_ord
 
-    @jax.named_scope("GokartVelxKernelMetric.compute")
+    @jax.named_scope("GokartVelxMetric.compute")
     def compute(self, simulator_state: datatypes.GoKartSimState) -> MetricResult:
         """Computes a state metric.
 
@@ -79,8 +79,9 @@ class GokartVelxKernelMetric(abstract_metric.AbstractMetric):
         )
 
         return reward.replace(value=jnp.squeeze(reward.value, axis=-1), valid=jnp.squeeze(reward.valid, axis=-1))
-    
-class GokartVelyKernelMetric(abstract_metric.AbstractMetric):
+
+
+class GokartVelyMetric(abstract_metric.AbstractMetric):
     """State metric.
 
     This metric returns a l kernel of vel_y state of the gokart.
@@ -95,7 +96,7 @@ class GokartVelyKernelMetric(abstract_metric.AbstractMetric):
         assert isinstance(l_ord, int)
         self.l_ord = l_ord
 
-    @jax.named_scope("GokartVelyKernelMetric.compute")
+    @jax.named_scope("GokartVelyMetric.compute")
     def compute(self, simulator_state: datatypes.GoKartSimState) -> MetricResult:
         """Computes a state metric.
 
@@ -116,12 +117,13 @@ class GokartVelyKernelMetric(abstract_metric.AbstractMetric):
 
         return reward.replace(value=jnp.squeeze(reward.value, axis=-1), valid=jnp.squeeze(reward.valid, axis=-1))
 
+
 class GokartStateOutRangeMetric(abstract_metric.AbstractMetric):
     """State metric.
-    
+
     This metric returns 1.0 if the state of the gokart is out of the given range.
     """
-    
+
     def __init__(self, state_attr_name: str, min_value: float = -jnp.inf, max_value: float = jnp.inf):
         """Initializes the state metric.
 
@@ -136,7 +138,7 @@ class GokartStateOutRangeMetric(abstract_metric.AbstractMetric):
         self.min = min_value
         self.max = max_value
 
-    @jax.named_scope("GokartVelxOutRangeMetric.compute")
+    @jax.named_scope("GokartStateOutRangeMetric.compute")
     def compute(self, simulator_state: datatypes.GoKartSimState) -> MetricResult:
         """Computes a state metric.
 
@@ -148,21 +150,23 @@ class GokartStateOutRangeMetric(abstract_metric.AbstractMetric):
           An array containing the metric result of the same shape as the input
             trajectories. The shape is (..., num_objects).
         """
-
-        state_attr_curr = simulator_state.current_sim_trajectory.vel_x[..., 0, :]
+        state_attr_curr = getattr(simulator_state.current_sim_trajectory, self.state_attr_name)[..., 0, :]
         reward = MetricResult.create_and_validate(
-            jnp.logical_or(jnp.less(state_attr_curr, self.min), jnp.greater(state_attr_curr, self.max)).astype(jnp.float32),
+            jnp.logical_or(jnp.less(state_attr_curr, self.min), jnp.greater(state_attr_curr, self.max)).astype(
+                jnp.float32
+            ),
             jnp.ones(simulator_state.num_objects, dtype=jnp.bool_),
         )
 
         return reward.replace(value=jnp.squeeze(reward.value, axis=-1), valid=jnp.squeeze(reward.valid, axis=-1))
-    
+
+
 class GokartVelxOutRangeMetric(abstract_metric.AbstractMetric):
     """State metric.
-    
+
     This metric returns 1.0 if the vel_x state of the gokart is out of the given range.
     """
-    
+
     def __init__(self, min_value: float = -jnp.inf, max_value: float = jnp.inf):
         """Initializes the state metric.
 
@@ -190,9 +194,10 @@ class GokartVelxOutRangeMetric(abstract_metric.AbstractMetric):
 
         state_attr_curr = simulator_state.current_sim_trajectory.vel_x[..., 0, :]
         reward = MetricResult.create_and_validate(
-            jnp.logical_or(jnp.less(state_attr_curr, self.min), jnp.greater(state_attr_curr, self.max)).astype(jnp.float32),
+            jnp.logical_or(jnp.less(state_attr_curr, self.min), jnp.greater(state_attr_curr, self.max)).astype(
+                jnp.float32
+            ),
             jnp.ones(simulator_state.num_objects, dtype=jnp.bool_),
         )
 
         return reward.replace(value=jnp.squeeze(reward.value, axis=-1), valid=jnp.squeeze(reward.valid, axis=-1))
-    

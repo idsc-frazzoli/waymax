@@ -29,10 +29,14 @@ from waymax.metrics.route import ProgressionMetric
 from waymax.metrics.gokart_progress import GokartProgressMetric
 from waymax.metrics.gokart_orientation import GokartOrientationMetric
 from waymax.metrics.gokart_offroad import GokartOffroadMetric
+from waymax.metrics.gokart_offroad import GokartDistanceToBoundsMetric
 from waymax.metrics.gokart_action import GokartActionMetric
 from waymax.metrics.gokart_action import GokartActionMetric
 from waymax.metrics.gokart_action import GokartActionRateMetric
 from waymax.metrics.gokart_action import GokartActionRateMetric
-from waymax.metrics.gokart_action import GokartActionTVMetric
-from waymax.metrics.gokart_state import GokartStateKernelMetric
+from waymax.metrics.gokart_action import GokartTVActionMetric
+from waymax.metrics.gokart_state import GokartStateMetric
 from waymax.metrics.gokart_state import GokartStateOutRangeMetric
+from waymax.metrics.gokart_state import GokartVelxMetric
+from waymax.metrics.gokart_state import GokartVelyMetric
+from waymax.metrics.gokart_state import GokartVelxOutRangeMetric

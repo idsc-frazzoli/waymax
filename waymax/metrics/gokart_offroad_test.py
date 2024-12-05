@@ -1,7 +1,8 @@
 import tensorflow as tf
 from absl.testing import parameterized
 
-from gocarx.metrics.gokart_offroad import GokartOffroadMetric
+from gocarx.env.track_config import TrackConfig, TrackType
+from waymax.metrics import GokartOffroadMetric, GokartDistanceToBoundsMetric
 from gocarx.utils.gokart_utils import create_init_state
 
 
@@ -23,3 +24,37 @@ class GokartOffroadMetricTest(tf.test.TestCase, parameterized.TestCase):
         result = metric.compute(state)
         # should be negative, because the car is offroad
         self.assertEqual(result.value, 1.0)
+        
+class GokartDistanceToBoundsMetricTest(tf.test.TestCase, parameterized.TestCase):
+    def test(self):
+        state = create_init_state(num_timesteps=5, track_config=TrackConfig(TrackType.WINTI_TEST_AIDED_3, False))
+        
+        metric = GokartDistanceToBoundsMetric(safety_margin=0.0, additional_offroad_reward=4.5)
+        result = metric.compute(state)
+        self.assertEqual(result.value, 0.0)
+        
+        metric = GokartDistanceToBoundsMetric(safety_margin=1.0, additional_offroad_reward=4.5)
+        result = metric.compute(state)
+        self.assertEqual(result.value, 0.0)
+        
+        state.sim_trajectory.y += -1.25
+        metric = GokartDistanceToBoundsMetric(safety_margin=0.75, additional_offroad_reward=4.5)
+        result = metric.compute(state)
+        self.assertAllClose(result.value, 0.00011847)
+        
+        state.sim_trajectory.y += -0.5
+        metric = GokartDistanceToBoundsMetric(safety_margin=0.75, additional_offroad_reward=4.5)
+        result = metric.compute(state)
+        self.assertAllClose(result.value, 0.451832)
+        
+        state.sim_trajectory.y += -5.0
+        metric = GokartDistanceToBoundsMetric(safety_margin=0.75, additional_offroad_reward=4.5)
+        result = metric.compute(state)
+        self.assertAllClose(result.value, 5.5)
+        
+
+if __name__ == "__main__":
+    tf.test.main()
+        
+        
+        
