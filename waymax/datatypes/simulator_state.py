@@ -154,6 +154,9 @@ class GoKartSimState(SimulatorState):
     def __eq__(self, other: Any) -> bool:
       return operations.compare_all_leaf_nodes(self, other)
 
+    def __eq__(self, other: Any) -> bool:
+      return operations.compare_all_leaf_nodes(self, other)
+
 def update_state_by_log(
     state: SimulatorState, num_steps: int
 ) -> SimulatorState:
