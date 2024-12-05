@@ -24,17 +24,29 @@ class WaymaxDrivingEnvironment(PlanningAgentEnvironment):
         indices = jnp.sort(indices)
         index = indices[-1]
         rg_xy = jnp.squeeze(transformed_obs.roadgraph_static_points.xy).reshape(-1)
-        sdc_vel_xy = jnp.squeeze(transformed_obs.trajectory.vel_xy)[index,:].reshape(-1)
+        sdc_speed = jnp.squeeze(transformed_obs.trajectory.vel_xy)[index,:].reshape(-1)
+
         # global_tar_1 = state.log_trajectory.xy[index, state.timestep+5].reshape(-1,2)
         # tar_1 = geometry.transform_points(pts=global_tar_1, pose_matrix=pose.matrix,).reshape(-1)
         # global_tar_2 = state.log_trajectory.xy[index, state.timestep+10].reshape(-1,2)
         # tar_2 = geometry.transform_points(pts=global_tar_2, pose_matrix=pose.matrix,).reshape(-1)
-        global_tar = jnp.where(state.timestep>=45, state.log_trajectory.xy[index, -1].reshape(-1,2), state.log_trajectory.xy[index, 45].reshape(-1,2))
-        tar_1 = geometry.transform_points(pts=global_tar, pose_matrix=pose.matrix,).reshape(-1)
+
+        # global_tar = jnp.where(state.timestep>=45, state.log_trajectory.xy[index, -1].reshape(-1,2), state.log_trajectory.xy[index, 45].reshape(-1,2))
+        # tar_1 = geometry.transform_points(pts=global_tar, pose_matrix=pose.matrix,).reshape(-1)
+
+        tars = []
+        for t_ele in range(5):
+          global_xy = state.log_trajectory.xy[index, state.timestep+t_ele].reshape(1,2)
+          tars.append(geometry.transform_points(pts=global_xy, pose_matrix=pose.matrix).reshape(-1))
+          global_vel_xy = state.log_trajectory.vel_xy[index, state.timestep+t_ele].reshape(1,2)
+          tars.append(geometry.transform_direction(pts_dir=global_vel_xy, pose_matrix=pose.matrix).reshape(-1))
+          global_yaw = state.log_trajectory.yaw[index, state.timestep+t_ele].reshape(1,)
+          tars.append((global_yaw + pose.delta_yaw).reshape(1,))
+        tars = jnp.concatenate(tars)
 
         #TODO: (tian) to delete the zeros in other_objects_xy
         obs = jnp.concatenate(
-                [other_objects_xy, rg_xy, tar_1, sdc_vel_xy,],
+                [rg_xy, tars, sdc_speed],
                 axis=-1)
         return obs
 
@@ -73,7 +85,7 @@ class WaymaxDrivingEnvironment(PlanningAgentEnvironment):
     
     def observation_spec(self) -> BoundedArray:
         # TODO: (tian) find a proper place to define obs_dim
-        dim = 236
+        dim = 227
         minimum = -jnp.array([jnp.inf] * dim)
         maximum = jnp.array([jnp.inf] * dim)
         specs = BoundedArray((dim,), jnp.float32, minimum, maximum)

@@ -54,7 +54,7 @@ class LogDivergenceMetric(abstract_metric.AbstractMetric):
         -1,
     )
     result = self.compute_log_divergence(
-        current_object_state.xy, current_log_state.xy
+        current_object_state.xy, current_log_state.xy, current_object_state.yaw, current_log_state.yaw
     )
     valid = current_object_state.valid & current_log_state.valid
     return abstract_metric.MetricResult.create_and_validate(
@@ -63,7 +63,7 @@ class LogDivergenceMetric(abstract_metric.AbstractMetric):
 
   @classmethod
   def compute_log_divergence(
-      cls, object_xy: jax.Array, log_xy: jax.Array
+      cls, object_xy: jax.Array, log_xy: jax.Array, object_yaw: jax.Array, log_yaw: jax.Array
   ) -> jax.Array:
     """Computes the L2 distance between `object_xy` and `log_xy`.
 
@@ -77,4 +77,4 @@ class LogDivergenceMetric(abstract_metric.AbstractMetric):
       A (..., num_objects, num_timesteps) array containing the metric result of
         the same shape as the input trajectories.
     """
-    return jnp.linalg.norm(object_xy - log_xy, axis=-1)
+    return jax.nn.sigmoid(-(jnp.linalg.norm(object_xy - log_xy, axis=-1)-5))

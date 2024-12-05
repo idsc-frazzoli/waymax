@@ -50,7 +50,7 @@ class LinearCombinationReward(abstract_reward_function.AbstractRewardFunction):
       An array of rewards, where there is one reward per agent
       (..., num_objects).
     """
-    del action  # unused
+    # del action  # unused
     all_metrics = metrics.run_metrics(simulator_state, self._metrics_config)
 
     reward = jnp.zeros_like(agent_mask)
@@ -58,6 +58,10 @@ class LinearCombinationReward(abstract_reward_function.AbstractRewardFunction):
       metric_all_agents = all_metrics[reward_metric_name].masked_value()
       metric = metric_all_agents * agent_mask
       reward += metric * reward_weight
+
+    penalty_action = jnp.zeros_like(agent_mask)
+    penalty_action += (jnp.abs(action.data[1])+jnp.abs(action.data[0]))*(-3)
+    reward += penalty_action
 
     # copied from metrics() in PlanningAgentEnvironment
     metric_dict = all_metrics
