@@ -97,7 +97,7 @@ class GokartDistanceToBoundsMetric(abstract_metric.AbstractMetric):
         metric_value = jax.lax.cond(
             min_distance[0] < self.safety_margin,
             lambda x: ((1 - x/self.safety_margin) ** 2),
-            lambda x: jnp.zeros_like(x),
+            jnp.zeros_like,
             min_distance,
         ) + offroad * self.additional_offroad_reward
         valid = jnp.ones_like(metric_value, dtype=jnp.bool_)
