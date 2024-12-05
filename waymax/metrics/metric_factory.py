@@ -42,16 +42,19 @@ _METRICS_REGISTRY: dict[str, abstract_metric.AbstractMetric] = {
     "gokart_orientation": gokart_orientation.GokartOrientationMetric(),
     "gokart_offroad": gokart_offroad.GokartOffroadMetric(),
     "gokart_almost_offroad": gokart_offroad.GokartOffroadMetric(0.2),
-    "gokart_vel_x": gokart_state.GokartStateKernelMetric("vel_x"),
-    "gokart_vel_y": gokart_state.GokartStateKernelMetric("vel_y"),
-    "gokart_vel_x_out_range": gokart_state.GokartStateOutRangeMetric("vel_x", -2.0, 6.0),
-    "gokart_action": gokart_action.GokartActionKernelMetric(),
-    "gokart_steer_action": gokart_action.GokartActionKernelMetric([0]),
-    "gokart_throttle_action": gokart_action.GokartActionKernelMetric([1, 2]),
-    "gokart_tv_action": gokart_action.GokartActionTVKernelMetric(),
-    "gokart_action_rate": gokart_action.GokartActionRateKernelMetric(),
-    "gokart_steer_action_rate": gokart_action.GokartActionRateKernelMetric([0]),
-    "gokart_throttle_action_rate": gokart_action.GokartActionRateKernelMetric([1, 2]),
+    "gokart_distance_to_bounds": gokart_offroad.GokartDistanceToBoundsMetric(0.3),
+    "gokart_vel_x": gokart_state.GokartVelxKernelMetric(),
+    "gokart_vel_y": gokart_state.GokartVelyKernelMetric(),
+    "gokart_yaw_rate": gokart_state.GokartStateKernelMetric("yaw_rate"), # example of a custom metric
+    "gokart_vel_x_out_range": gokart_state.GokartVelxOutRangeMetric(-2.0, 6.0),
+    "gokart_vel_y_out_range": gokart_state.GokartStateOutRangeMetric("vel_y", -3.0, 3.0), # example of a custom metric
+    "gokart_action": gokart_action.GokartActionMetric(),
+    "gokart_steer_action": gokart_action.GokartActionMetric(["steering_angle"]),
+    "gokart_throttle_action": gokart_action.GokartActionMetric(["AB_L", "AB_R"]),
+    "gokart_tv_action": gokart_action.GokartActionTVMetric(),
+    "gokart_action_rate": gokart_action.GokartActionRateMetric(),
+    "gokart_steer_action_rate": gokart_action.GokartActionRateMetric(["steering_angle"]),
+    "gokart_throttle_action_rate": gokart_action.GokartActionRateMetric(["AB_L", "AB_R"]),
 }
 
 

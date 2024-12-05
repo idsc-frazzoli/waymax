@@ -105,6 +105,7 @@ def is_offroad(
     trajectory: datatypes.Trajectory,
     roadgraph_points: datatypes.RoadgraphPoints,
     safety_margin: float = 0.0,
+    return_mask: bool = True,
 ) -> jax.Array:
   """Checks if the given trajectory is offroad.
 
@@ -123,10 +124,15 @@ def is_offroad(
     safety_margin: The safety margin to consider a trajectory offroad. If the
       distance to the road edge is less than this value, the trajectory is
       considered offroad.
+    return_mask: If True, returns a boolean mask indicating if the trajectory is
+      offroad. If False, returns the signed distance to the nearest road edge.
 
   Returns:
-    agent_mask: a bool array with the shape (..., num_objects). The value is
-    True if the bbox is offroad.
+    agent_mask: if `return_mask` is true, a bool array with the shape (..., num_objects). The value is
+    True if the bbox is offroad. If `return_mask` is False, a float array with
+    the shape (..., num_objects) representing the signed distance to the road
+    edge. If the value is negative, it means that the actor is on the correct
+    side of the road, if it is positive, it is considered `offroad`.
   """
   # Shape: (..., num_objects, num_corners=4, 2).
   bbox_corners = jnp.squeeze(trajectory.bbox_corners, axis=-3)
@@ -156,7 +162,10 @@ def is_offroad(
   # Shape: (..., num_objects, num_corners=4).
   distances = jnp.reshape(distances, [*shape_prefix, num_agents, num_points])
   # Shape: (..., num_objects).
-  return jnp.any(distances > -safety_margin, axis=-1)
+  if return_mask:
+    return jnp.any(distances > -safety_margin, axis=-1)
+  else:
+    return distances
 
 
 def compute_signed_distance_to_nearest_road_edge_point(

@@ -134,8 +134,23 @@ class GoKartSimState(SimulatorState):
     sim_trajectory: object_state.GokartTrajectory
     log_trajectory: object_state.GokartTrajectory
     sdc_paths: Optional[route.GoKartPaths] = None
-    history_actions: Optional[jax.Array] = None
+    history_actions: Optional[object_state.GokartActionHistory] = None
 
+    def last_N_actions(self, n: int, rel_timestep: int = -1) -> object_state.GokartActionHistory:
+      """Returns the action corresponding to the previous sim state.
+      Pay attention: when computing the reward after the action applied at timestep X,
+      the timestep of the SimState is actually X+1 (since we advanced to the next trajectory state),
+      however the action at timestep X+1 is still undefined. You should use rel_timestep=-1
+      to get the action at timestep X."""
+      return operations.dynamic_slice(
+          self.history_actions, jnp.maximum(self.timestep + rel_timestep, 0), n, axis=-1
+      )
+      
+    @property
+    def last_action(self) -> object_state.GokartActionHistory:
+      """Returns the action corresponding to the previous sim state."""
+      return self.last_N_actions(1)
+    
     def __eq__(self, other: Any) -> bool:
       return operations.compare_all_leaf_nodes(self, other)
 
