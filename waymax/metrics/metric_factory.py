@@ -76,12 +76,11 @@ def run_metrics(
         metric is of shape (..., num_objects).
     """
     results = {}
-    with jax.profiler.trace("/tmp/jax-trace"):
-        for metric_name in metrics_config.metrics_to_run:
-            if metric_name in _METRICS_REGISTRY:
-                results[metric_name] = _METRICS_REGISTRY[metric_name].compute(simulator_state)
-            else:
-                raise ValueError(f"Metric {metric_name} not registered.")
+    for metric_name in metrics_config.metrics_to_run:
+        if metric_name in _METRICS_REGISTRY:
+            results[metric_name] = _METRICS_REGISTRY[metric_name].compute(simulator_state)
+        else:
+            raise ValueError(f"Metric {metric_name} not registered.")
 
     return results
 

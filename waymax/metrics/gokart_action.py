@@ -26,10 +26,7 @@ class GokartActionMetric(abstract_metric.AbstractMetric):
         if action_names is not None:
             assert all(isinstance(action_name, str) for action_name in action_names)
         assert isinstance(l_ord, int)
-        if action_names is not None:
-            self.action_names = action_names
-        else:
-            self.action_names = datatypes.GokartActionHistory.controllable_fields
+        self.action_names = action_names
         self.l_ord = l_ord
 
     @jax.named_scope("GokartActionMetric.compute")
@@ -44,12 +41,20 @@ class GokartActionMetric(abstract_metric.AbstractMetric):
           An array containing the metric result of the same shape as the input
             trajectories. The shape is (..., num_objects).
         """
+        
+        jax.debug.print("ts {}, prev action {}, metric {}", simulator_state.timestep, simulator_state.prev_actions(self.action_names, 1), jax.lax.cond(
+            simulator_state.timestep > jnp.zeros_like(simulator_state.timestep),
+            lambda x: jnp.sum(jnp.pow(jnp.abs(x), self.l_ord)),
+            lambda x: 0.0,
+            simulator_state.prev_actions(self.action_names, 1),
+        ))
+
         reward = MetricResult.create_and_validate(
             jax.lax.cond(
                 simulator_state.timestep > jnp.zeros_like(simulator_state.timestep),
                 lambda x: jnp.sum(jnp.pow(jnp.abs(x), self.l_ord)),
                 lambda x: 0.0,
-                simulator_state.last_action.stack_fields(self.action_names)[..., 0, :],
+                simulator_state.prev_actions(self.action_names, 1),
             ),
             jnp.ones(simulator_state.num_objects, dtype=jnp.bool_).squeeze(-1),
         )
@@ -75,9 +80,7 @@ class GokartActionRateMetric(abstract_metric.AbstractMetric):
         if action_names is not None:
             assert all(isinstance(action_name, str) for action_name in action_names)
         assert isinstance(l_ord, int)
-        self.action_names = (
-            action_names if action_names is not None else datatypes.GokartActionHistory.controllable_fields
-        )
+        self.action_names = action_names
         self.l_ord = l_ord
 
     @jax.named_scope("GokartActionRateMetric.compute")
@@ -93,13 +96,12 @@ class GokartActionRateMetric(abstract_metric.AbstractMetric):
             trajectories. The shape is (..., num_objects).
         """
 
-        # jax.debug.print("ts {}, action_attrs {}", simulator_state.timestep, action_attrs)
         reward = MetricResult.create_and_validate(
             jax.lax.cond(
                 simulator_state.timestep > jnp.ones_like(simulator_state.timestep),
-                lambda x: jnp.sum(jnp.pow(jnp.abs(x[1] - x[0]), self.l_ord)),
+                lambda x: jnp.sum(jnp.pow(jnp.abs(x[..., 1, :] - x[..., 0, :]), self.l_ord)),
                 lambda x: 0.0,
-                simulator_state.last_N_actions(2).stack_fields(self.action_names)[..., :2, :].squeeze(0),
+                simulator_state.prev_actions(self.action_names, 2),
             ),
             jnp.ones(simulator_state.num_objects, dtype=jnp.bool_).squeeze(-1),
         )
@@ -138,12 +140,13 @@ class GokartTVActionMetric(abstract_metric.AbstractMetric):
             trajectories. The shape is (..., num_objects).
         """
 
+        prev_action = simulator_state.prev_actions(["AB_L", "AB_R"], 1)
         reward = MetricResult.create_and_validate(
             jax.lax.cond(
                 simulator_state.timestep > jnp.zeros_like(simulator_state.timestep),
-                lambda x: jnp.pow(jnp.abs(x), self.l_ord).squeeze(-1),
+                lambda x: jnp.pow(jnp.abs(x), self.l_ord),
                 lambda x: 0.0,
-                simulator_state.last_action.TV[..., 0],
+                (prev_action[..., 1] - prev_action[..., 0]).squeeze(),
             ),
             jnp.ones(simulator_state.num_objects, dtype=jnp.bool_).squeeze(-1),
         )

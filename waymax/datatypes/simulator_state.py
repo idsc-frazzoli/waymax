@@ -20,7 +20,8 @@ The validate function is implemented separately instead of as __post_init__, to
 have better support with jax utils.
 """
 
-from typing import Any, Optional
+from tracemalloc import start
+from typing import Any, Optional, Sequence
 
 import chex
 import jax
@@ -132,24 +133,18 @@ class GoKartSimState(SimulatorState):
     sim_trajectory: object_state.GokartTrajectory
     log_trajectory: object_state.GokartTrajectory
     sdc_paths: Optional[route.GoKartPaths] = None
-    history_actions: Optional[object_state.GokartActionHistory] = None
-
-    def last_N_actions(self, n: int) -> object_state.GokartActionHistory:
-        """Returns the action corresponding to the previous sim state.
-        Pay attention: when computing the reward after the action applied at timestep X-1,
-        the timestep of the SimState is actually X (since we advanced to the next trajectory state),
-        however the action at timestep X is still undefined. That's why this function
-        returns the last action as the action at timestep X-1.
-        """
-        return operations.dynamic_slice(self.history_actions, jnp.maximum(self.timestep - n, 0), n, axis=-1)
 
     @property
-    def last_action(self) -> object_state.GokartActionHistory:
-        """Returns the action corresponding to the previous sim state."""
-        return self.last_N_actions(1)
+    def prev_sim_trajectory(self) -> object_state.GokartTrajectory:
+        """Returns the trajectory corresponding to the previous sim state."""
+        return operations.dynamic_slice(self.sim_trajectory, jnp.max(self.timestep - 1, 0), 1, axis=-1)
 
-    def __eq__(self, other: Any) -> bool:
-        return operations.compare_all_leaf_nodes(self, other)
+    def prev_actions(self, field_names: Optional[Sequence[str]], n: int) -> jax.Array:
+        """Returns the last N actions."""
+        if field_names is None:
+          field_names = self.sim_trajectory.action_fields
+        start_idx = jnp.maximum(self.timestep - n, 0)
+        return operations.dynamic_slice(self.sim_trajectory, start_idx, n, axis=-1).stack_fields(field_names)
 
     def __eq__(self, other: Any) -> bool:
         return operations.compare_all_leaf_nodes(self, other)
