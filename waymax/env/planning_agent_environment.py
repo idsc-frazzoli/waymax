@@ -363,7 +363,7 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
           The next simulation state after taking an action of shape (...).
         """
         
-        state.sim_trajectory = state.sim_trajectory.set_actions(action, state.timestep)
+        new_history_actions = state.history_actions.set_actions(action, state.timestep)
                 
         planning_agent_action = self._planning_agent_dynamics.compute_update(
             action, state.current_sim_trajectory
@@ -413,6 +413,7 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
         return state.replace(
             sim_trajectory=new_traj,
             timestep=state.timestep + 1,
+            history_actions=new_history_actions,
             sim_agent_actor_states=updated_sim_agent_actor_states,
         )
 

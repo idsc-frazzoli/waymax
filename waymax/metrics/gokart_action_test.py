@@ -12,9 +12,15 @@ class GokartActionMetricTest(tf.test.TestCase, parameterized.TestCase):
         metric = GokartActionMetric()
         state = create_init_state(num_timesteps=5)
         
-        state.sim_trajectory.steering_angle = state.sim_trajectory.steering_angle.at[:].set([0.0, 0.1, -0.9654, 0.676, -0.232])
-        state.sim_trajectory.AB_L = state.sim_trajectory.AB_L = state.sim_trajectory.AB_L.at[:].set([0.0, 0.2, 0.676, -0.843, 0.39])
-        state.sim_trajectory.AB_R = state.sim_trajectory.AB_R = state.sim_trajectory.AB_R.at[:].set([0.0, 0.3, -0.232, 0.123, -0.54])
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([0.0, 0.0, 0.0]), valid=jnp.ones((1, 3))), 0
+        )
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([0.1, 0.2, 0.3]), valid=jnp.ones((1, 3))), 1
+        )
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([-0.9654, 0.676, -0.232]), valid=jnp.ones((1, 3))), 2
+        )
 
         result = metric.compute(state)
         self.assertEqual(result.value, 0.0)
@@ -35,9 +41,21 @@ class GokartActionMetricTest(tf.test.TestCase, parameterized.TestCase):
         metric = GokartActionMetric(["steering_angle"])
         state = create_init_state(num_timesteps=5)
         
-        state.sim_trajectory.steering_angle = state.sim_trajectory.steering_angle.at[:].set([0.0, 0.1, -0.9654, 0.0, 0.382])
-        state.sim_trajectory.AB_L = state.sim_trajectory.AB_L.at[:].set([0.676, 0.2, 0.676, -0.843, 0.39])
-        state.sim_trajectory.AB_R = state.sim_trajectory.AB_R.at[:].set([-0.232, 0.3, -0.232, 0.123, -0.54])
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([0.0, 0.676, -0.232]), valid=jnp.ones((1, 3))), 0
+        )
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([0.1, 0.2, 0.3]), valid=jnp.ones((1, 3))), 1
+        )
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([-0.9654, 0.676, -0.232]), valid=jnp.ones((1, 3))), 2
+        )
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([0.0, -0.843, 0.123]), valid=jnp.ones((1, 3))), 3
+        )
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([0.382, 0.39, -0.54]), valid=jnp.ones((1, 3))), 4
+        )
 
         result = metric.compute(state)
         self.assertEqual(result.value, 0.0)
@@ -58,9 +76,21 @@ class GokartActionMetricTest(tf.test.TestCase, parameterized.TestCase):
         metric = GokartActionMetric(["AB_L", "AB_R"])
         state = create_init_state(num_timesteps=5)
         
-        state.sim_trajectory.steering_angle = state.sim_trajectory.steering_angle.at[:].set([-0.9654, 0.1, -0.9654, 0.54, -0.28])
-        state.sim_trajectory.AB_L = state.sim_trajectory.AB_L.at[:].set([0.0, 0.2, 0.676, -0.843, 0.39])
-        state.sim_trajectory.AB_R = state.sim_trajectory.AB_R.at[:].set([0.0, 0.3, -0.232, 0.123, -0.54])
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([-0.9654, 0.0, 0.0]), valid=jnp.ones((1, 3))), 0
+        )
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([0.1, 0.2, 0.3]), valid=jnp.ones((1, 3))), 1
+        )
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([-0.9654, 0.676, -0.232]), valid=jnp.ones((1, 3))), 2
+        )
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([0.54, -0.843, 0.123]), valid=jnp.ones((1, 3))), 3
+        )
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([-0.28, 0.39, -0.54]), valid=jnp.ones((1, 3))), 4
+        )
 
         result = metric.compute(state)
         self.assertEqual(result.value, 0.0)
@@ -84,9 +114,21 @@ class GokartActionRateMetricTest(tf.test.TestCase, parameterized.TestCase):
         metric = GokartActionRateMetric()
         state = create_init_state(num_timesteps=5)
         
-        state.sim_trajectory.steering_angle = state.sim_trajectory.steering_angle.at[:].set([0.1, 0.4, -0.654, -0.103, -0.629])
-        state.sim_trajectory.AB_L = state.sim_trajectory.AB_L.at[:].set([0.2, -0.6, 0.038, 0.812, 0.123])
-        state.sim_trajectory.AB_R = state.sim_trajectory.AB_R.at[:].set([0.3, 0.7, -0.283, -0.539, -0.654])
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([0.1, 0.2, 0.3]), valid=jnp.ones((1, 3))), 0
+        )
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([0.4, -0.6, 0.7]), valid=jnp.ones((1, 3))), 1
+        )
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([-0.654, 0.038, -0.283]), valid=jnp.ones((1, 3))), 2
+        )
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([-0.103, 0.812, -0.539]), valid=jnp.ones((1, 3))), 3
+        )
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([-0.629, 0.123, -0.654]), valid=jnp.ones((1, 3))), 4
+        )
         
         result = metric.compute(state)
         self.assertEqual(result.value, 0.0)
@@ -111,9 +153,21 @@ class GokartActionRateMetricTest(tf.test.TestCase, parameterized.TestCase):
         metric = GokartActionRateMetric(["steering_angle"])
         state = create_init_state(num_timesteps=5)
         
-        state.sim_trajectory.steering_angle = state.sim_trajectory.steering_angle.at[:].set([0.1, 0.4, -0.654, -0.103, -0.812])
-        state.sim_trajectory.AB_L = state.sim_trajectory.AB_L.at[:].set([0.2, -0.6, 0.038, 0.812, 0.123])
-        state.sim_trajectory.AB_R = state.sim_trajectory.AB_R.at[:].set([0.3, 0.7, -0.283, -0.539, -0.654])
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([0.1, 0.2, 0.3]), valid=jnp.ones((1, 3))), 0
+        )
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([0.4, -0.6, 0.7]), valid=jnp.ones((1, 3))), 1
+        )
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([-0.654, 0.038, -0.283]), valid=jnp.ones((1, 3))), 2
+        )
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([-0.103, 0.812, -0.539]), valid=jnp.ones((1, 3))), 3
+        )
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([-0.812, 0.123, -0.654]), valid=jnp.ones((1, 3))), 4
+        )
 
         result = metric.compute(state)
         self.assertEqual(result.value, 0.0)
@@ -138,9 +192,21 @@ class GokartActionRateMetricTest(tf.test.TestCase, parameterized.TestCase):
         metric = GokartActionRateMetric(["AB_L", "AB_R"])
         state = create_init_state(num_timesteps=5)
         
-        state.sim_trajectory.steering_angle = state.sim_trajectory.steering_angle.at[:].set([0.1, 0.4, -0.654, -0.103, -0.812])
-        state.sim_trajectory.AB_L = state.sim_trajectory.AB_L.at[:].set([0.2, -0.6, 0.038, 0.812, -0.543])
-        state.sim_trajectory.AB_R = state.sim_trajectory.AB_R.at[:].set([0.3, 0.7, -0.283, -0.539, 0.693])
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([0.1, 0.2, 0.3]), valid=jnp.ones((1, 3))), 0
+        )
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([0.4, -0.6, 0.7]), valid=jnp.ones((1, 3))), 1
+        )
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([-0.654, 0.038, -0.283]), valid=jnp.ones((1, 3))), 2
+        )
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([-0.103, 0.812, -0.539]), valid=jnp.ones((1, 3))), 3
+        )
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([-0.812, 0.123, -0.654]), valid=jnp.ones((1, 3))), 4
+        )
 
         result = metric.compute(state)
         self.assertEqual(result.value, 0.0)
@@ -168,10 +234,22 @@ class GokartTVActionMetricTest(tf.test.TestCase, parameterized.TestCase):
 
         metric = GokartTVActionMetric()
         state = create_init_state(num_timesteps=5)
-
-        state.sim_trajectory.steering_angle = state.sim_trajectory.steering_angle.at[:].set([-0.9654, 0.1, -0.9654, 0.54, -0.28])
-        state.sim_trajectory.AB_L = state.sim_trajectory.AB_L.at[:].set([0.0, 0.2, 0.676, -0.843, 0.39])
-        state.sim_trajectory.AB_R = state.sim_trajectory.AB_R.at[:].set([0.0, 0.3, -0.232, 0.123, -0.54])
+        
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([-0.9654, 0.0, 0.0]), valid=jnp.ones((1, 3))), 0
+        )
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([0.1, 0.2, 0.3]), valid=jnp.ones((1, 3))), 1
+        )
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([-0.9654, 0.676, -0.232]), valid=jnp.ones((1, 3))), 2
+        )
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([0.54, -0.843, 0.123]), valid=jnp.ones((1, 3))), 3
+        )
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([-0.28, 0.39, -0.54]), valid=jnp.ones((1, 3))), 4
+        )
 
         result = metric.compute(state)
         self.assertEqual(result.value, 0.0)
