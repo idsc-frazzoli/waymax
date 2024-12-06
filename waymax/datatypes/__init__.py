@@ -26,7 +26,6 @@ from waymax.datatypes.object_state import ObjectMetadata
 from waymax.datatypes.object_state import ObjectTypeIds
 from waymax.datatypes.object_state import Trajectory
 from waymax.datatypes.object_state import GokartTrajectory
-from waymax.datatypes.object_state import GokartActionHistory
 from waymax.datatypes.observation import ObjectPose2D
 from waymax.datatypes.observation import Observation
 from waymax.datatypes.observation import observation_from_state
