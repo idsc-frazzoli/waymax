@@ -23,6 +23,7 @@ from jax import numpy as jnp
 
 from waymax.datatypes import operations, Action
 from waymax.utils import geometry
+from waymax.utils.classproperty import classproperty
 
 _INVALID_FLOAT_VALUE = -1.0
 _INVALID_INT_VALUE = -1
@@ -302,42 +303,11 @@ class GokartTrajectory(Trajectory):
     yaw_rate: jax.Array
     acc_x: jax.Array
     acc_y: jax.Array
-    steering_angle: jax.Array
-    AB_L: jax.Array
-    AB_R: jax.Array
 
     @property
     def controllable_fields(self) -> Sequence[str]:
         """Returns the fields that are controllable."""
         return ["x", "y", "yaw", "vel_x", "vel_y", "yaw_rate", "acc_x", "acc_y"]
-
-    @property
-    def action_fields(self) -> Sequence[str]:
-        """Returns the fields that are controllable."""
-        return ["steering_angle", "AB_L", "AB_R"]
-    
-    @property
-    def num_actions(self) -> int:
-        """The number of objects included in this trajectory per example."""
-        return len(self.action_fields)
-    
-    @property
-    def AB_LR(self) -> jax.Array:
-        """Stacked AB action"""
-        return jnp.stack([self.AB_L, self.AB_R], axis=-1)
-
-    @property
-    def TV(self) -> jax.Array:
-        """Stacked Torque Vectoring indirect action (AB_R - AB_L)"""
-        return self.AB_R - self.AB_L
-    
-    def set_actions(self, action: Action, timestep: jax.typing.ArrayLike) -> "GokartTrajectory":
-        """Update the action fields of the trajectory."""
-        return self.replace(
-            steering_angle=self.steering_angle.at[0, timestep].set(action.data[0]),
-            AB_L=self.AB_L.at[..., timestep].set(action.data[1]),
-            AB_R=self.AB_R.at[..., timestep].set(action.data[2]),
-        )
 
     @classmethod
     def zeros(cls, shape: Sequence[int]) -> "GokartTrajectory":
@@ -352,9 +322,6 @@ class GokartTrajectory(Trajectory):
             yaw_rate=jnp.zeros(shape, jnp.float32),
             acc_x=jnp.zeros(shape, jnp.float32),
             acc_y=jnp.zeros(shape, jnp.float32),
-            steering_angle=jnp.zeros(shape, jnp.float32),
-            AB_L=jnp.zeros(shape, jnp.float32),
-            AB_R=jnp.zeros(shape, jnp.float32),
             valid=jnp.zeros(shape, jnp.bool_),
             length=jnp.zeros(shape, jnp.float32),
             width=jnp.zeros(shape, jnp.float32),
@@ -375,9 +342,6 @@ class GokartTrajectory(Trajectory):
                 self.yaw_rate,
                 self.acc_x,
                 self.acc_y,
-                self.steering_angle,
-                self.AB_L,
-                self.AB_R,
                 self.valid,
                 self.timestamp_micros,
                 self.length,
@@ -396,9 +360,6 @@ class GokartTrajectory(Trajectory):
                 self.yaw_rate,
                 self.acc_x,
                 self.acc_y,
-                self.steering_angle,
-                self.AB_L,
-                self.AB_R,
                 self.valid,
                 self.timestamp_micros,
                 self.length,

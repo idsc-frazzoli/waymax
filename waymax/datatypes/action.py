@@ -13,13 +13,14 @@
 # limitations under the License.
 
 """Dataclass definitions for dynamics models."""
-from typing import Any
+from typing import Any, Sequence
 
 import chex
 import jax
 import jax.numpy as jnp
 
 from waymax.datatypes import operations
+from waymax.utils.classproperty import classproperty
 
 
 # TODO: make Actions inherit from datatypes.MaskedArray.
@@ -150,3 +151,98 @@ class GoKartTrajectoryUpdate(TrajectoryUpdate):
         [self.x, self.y, self.yaw, self.vel_x, self.vel_y, self.yaw_rate, self.acc_x, self.acc_y], axis=-1
     )
     return Action(data=action, valid=self.valid)
+
+
+
+
+@chex.dataclass
+class GokartActionHistory:
+    """
+    Data structure representing the action history of a gokart.
+
+    Attributes:
+
+      steering_angle: The steering angle of the gokart at each time step of data type float32.
+      AB_L: The left front wheel position of the gokart at each time step of data type float32.
+      AB_R: The right front wheel position of the gokart at each time step of data type float32.
+    """
+
+    steering_angle: jax.Array
+    AB_L: jax.Array
+    AB_R: jax.Array
+
+    @property
+    def shape(self) -> tuple[int, ...]:
+        """The Array shape of this history."""
+        return self.steering_angle.shape
+
+    @property
+    def num_actions(self) -> int:
+        """The number of actions."""
+        return self.shape[-2]
+
+    @property
+    def num_timesteps(self) -> int:
+        """The length of this history."""
+        return self.shape[-1]
+
+    @property
+    def AB_LR(self) -> jax.Array:
+        """Stacked AB action"""
+        return jnp.stack([self.AB_L, self.AB_R], axis=-1)
+
+    @property
+    def TV(self) -> jax.Array:
+        """Stacked Torque Vectoring indirect action (AB_R - AB_L)"""
+        return self.AB_R - self.AB_L
+
+    @classproperty
+    def action_fields(self) -> Sequence[str]:
+        """Returns the action fields."""
+        return ["steering_angle", "AB_L", "AB_R"]
+
+    @classmethod
+    def zeros(cls, shape: Sequence[int]) -> "GokartActionHistory":
+        """Creates a Trajectory containing zeros of the specified shape."""
+        return cls(
+            steering_angle=jnp.zeros(shape, jnp.float32),
+            AB_L=jnp.zeros(shape, jnp.float32),
+            AB_R=jnp.zeros(shape, jnp.float32),
+        )
+
+    def __eq__(self, other: Any) -> bool:
+        return operations.compare_all_leaf_nodes(self, other)
+
+    def stack_fields(self, field_names: Sequence[str]) -> jax.Array:
+        """Returns a concatenated version of a set of field names for Trajectory."""
+        return jnp.stack([getattr(self, field_name) for field_name in field_names], axis=-1)
+    
+    def set_actions(self, action: Action, timestep: jax.typing.ArrayLike) -> "GokartActionHistory":
+        """Return a new action history updated at timestep with the new action."""
+        return self.replace(
+            steering_angle=self.steering_angle.at[..., timestep].set(action.data[0]),
+            AB_L=self.AB_L.at[..., timestep].set(action.data[1]),
+            AB_R=self.AB_R.at[..., timestep].set(action.data[2]),
+        )
+
+    def validate(self):
+        """Validates shape and type."""
+        chex.assert_equal_shape(
+            [
+                self.steering_angle,
+                self.AB_L,
+                self.AB_R,
+            ]
+        )
+        chex.assert_type(
+            [
+                self.steering_angle,
+                self.AB_L,
+                self.AB_R,
+            ],
+            [
+                jnp.float32,
+                jnp.float32,
+                jnp.float32,
+            ],
+        )

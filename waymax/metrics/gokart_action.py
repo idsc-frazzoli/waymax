@@ -41,13 +41,6 @@ class GokartActionMetric(abstract_metric.AbstractMetric):
           An array containing the metric result of the same shape as the input
             trajectories. The shape is (..., num_objects).
         """
-        
-        jax.debug.print("ts {}, prev action {}, metric {}", simulator_state.timestep, simulator_state.prev_actions(self.action_names, 1), jax.lax.cond(
-            simulator_state.timestep > jnp.zeros_like(simulator_state.timestep),
-            lambda x: jnp.sum(jnp.pow(jnp.abs(x), self.l_ord)),
-            lambda x: 0.0,
-            simulator_state.prev_actions(self.action_names, 1),
-        ))
 
         reward = MetricResult.create_and_validate(
             jax.lax.cond(

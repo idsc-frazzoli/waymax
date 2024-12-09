@@ -20,7 +20,6 @@ The validate function is implemented separately instead of as __post_init__, to
 have better support with jax utils.
 """
 
-from tracemalloc import start
 from typing import Any, Optional, Sequence
 
 import chex
@@ -29,6 +28,7 @@ import jax.numpy as jnp
 
 from waymax import config
 from waymax.datatypes import array
+from waymax.datatypes import action
 from waymax.datatypes import object_state
 from waymax.datatypes import operations
 from waymax.datatypes import roadgraph
@@ -133,18 +133,19 @@ class GoKartSimState(SimulatorState):
     sim_trajectory: object_state.GokartTrajectory
     log_trajectory: object_state.GokartTrajectory
     sdc_paths: Optional[route.GoKartPaths] = None
+    history_actions: Optional[action.GokartActionHistory] = None
 
     @property
     def prev_sim_trajectory(self) -> object_state.GokartTrajectory:
         """Returns the trajectory corresponding to the previous sim state."""
         return operations.dynamic_slice(self.sim_trajectory, jnp.max(self.timestep - 1, 0), 1, axis=-1)
 
-    def prev_actions(self, field_names: Optional[Sequence[str]], n: int) -> jax.Array:
+    def prev_actions(self, field_names: Optional[Sequence[str]] = None, n: int = 1) -> jax.Array:
         """Returns the last N actions."""
         if field_names is None:
-          field_names = self.sim_trajectory.action_fields
+            field_names = self.history_actions.action_fields
         start_idx = jnp.maximum(self.timestep - n, 0)
-        return operations.dynamic_slice(self.sim_trajectory, start_idx, n, axis=-1).stack_fields(field_names)
+        return operations.dynamic_slice(self.history_actions, start_idx, n, axis=-1).stack_fields(field_names)
 
     def __eq__(self, other: Any) -> bool:
         return operations.compare_all_leaf_nodes(self, other)
