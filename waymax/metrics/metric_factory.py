@@ -42,11 +42,11 @@ _METRICS_REGISTRY: dict[str, abstract_metric.AbstractMetric] = {
     "gokart_orientation": gokart_orientation.GokartOrientationMetric(),
     "gokart_offroad": gokart_offroad.GokartOffroadMetric(0.0),
     "gokart_distance_to_bounds": gokart_offroad.GokartDistanceToBoundsMetric(0.3, -1),
-    "gokart_vel_x": gokart_state.GokartVelxMetric(),
-    "gokart_vel_y": gokart_state.GokartVelyMetric(),
+    "gokart_vel_x": gokart_state.GokartStateMetric("vel_x"),
+    "gokart_vel_y": gokart_state.GokartStateMetric("vel_y"),
     "gokart_yaw_rate": gokart_state.GokartStateMetric("yaw_rate"),  # example of a custom metric
-    "gokart_vel_x_out_range": gokart_state.GokartVelxOutRangeMetric(-2.0, 6.0),
-    "gokart_vel_y_out_range": gokart_state.GokartStateOutRangeMetric("vel_y", -3.0, 3.0),  # example of a custom metric
+    "gokart_vel_x_out_range": gokart_state.GokartStateOutRangeMetric("vel_x", -2.0, 6.0),
+    "gokart_vel_y_out_range": gokart_state.GokartStateOutRangeMetric("vel_y", -1.2, 1.2),
     "gokart_action": gokart_action.GokartActionMetric(),
     "gokart_steer_action": gokart_action.GokartActionMetric(["steering_angle"]),
     "gokart_throttle_action": gokart_action.GokartActionMetric(["acc_left", "acc_right"]),
@@ -55,9 +55,6 @@ _METRICS_REGISTRY: dict[str, abstract_metric.AbstractMetric] = {
     "gokart_steer_action_rate": gokart_action.GokartActionRateMetric(["steering_angle"]),
     "gokart_throttle_action_rate": gokart_action.GokartActionRateMetric(["acc_left", "acc_right"]),
 }
-
-import jax
-
 
 def run_metrics(
     simulator_state: datatypes.SimulatorState,

@@ -37,6 +37,3 @@ from waymax.metrics.gokart_action import GokartActionRateMetric
 from waymax.metrics.gokart_action import GokartTVActionMetric
 from waymax.metrics.gokart_state import GokartStateMetric
 from waymax.metrics.gokart_state import GokartStateOutRangeMetric
-from waymax.metrics.gokart_state import GokartVelxMetric
-from waymax.metrics.gokart_state import GokartVelyMetric
-from waymax.metrics.gokart_state import GokartVelxOutRangeMetric
