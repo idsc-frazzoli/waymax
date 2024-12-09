@@ -1,9 +1,8 @@
-from turtle import distance
 import jax
 from jax import numpy as jnp
 
 from waymax import datatypes
-from waymax.metrics import abstract_metric, MetricResult
+from waymax.metrics import abstract_metric
 from waymax.metrics.roadgraph import is_offroad
 
 

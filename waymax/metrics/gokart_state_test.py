@@ -1,10 +1,8 @@
-from humanize import metric
 import tensorflow as tf
 from absl.testing import parameterized
-from jax import numpy as jnp
 
-from waymax.metrics import GokartStateMetric, GokartStateOutRangeMetric, GokartVelyMetric, GokartVelxOutRangeMetric
 from gocarx.utils.gokart_utils import create_init_state
+from waymax.metrics import GokartStateMetric, GokartStateOutRangeMetric, GokartVelyMetric, GokartVelxOutRangeMetric
 
 
 class GokartStateMetricTest(tf.test.TestCase, parameterized.TestCase):

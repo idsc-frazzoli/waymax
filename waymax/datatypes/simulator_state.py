@@ -133,7 +133,7 @@ class GoKartSimState(SimulatorState):
     sim_trajectory: object_state.GokartTrajectory
     log_trajectory: object_state.GokartTrajectory
     sdc_paths: Optional[route.GoKartPaths] = None
-    history_actions: Optional[action.GokartActionHistory] = None
+    history_actions: Optional[action.GokartAction] = None
 
     @property
     def prev_sim_trajectory(self) -> object_state.GokartTrajectory:

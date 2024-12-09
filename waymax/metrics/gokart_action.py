@@ -1,8 +1,7 @@
-from typing import Optional, List, Sequence
+from typing import Optional, Sequence
+
 import jax
 from jax import numpy as jnp
-from jaxtyping import AbstractArray
-from prometheus_client import Metric
 
 from waymax import datatypes
 from waymax.metrics import abstract_metric, MetricResult
@@ -107,7 +106,7 @@ class GokartTVActionMetric(abstract_metric.AbstractMetric):
 
     This metric returns a l norm of the TV taken by the gokart.
     TV (torque vectoring) is the difference between the right and left wheel accelerations:
-    TV = AB_R - AB_L
+    TV = acc_right - acc_left
     """
 
     def __init__(self, l_ord: int = 2):
@@ -133,7 +132,7 @@ class GokartTVActionMetric(abstract_metric.AbstractMetric):
             trajectories. The shape is (..., num_objects).
         """
 
-        prev_action = simulator_state.prev_actions(["AB_L", "AB_R"], 1)
+        prev_action = simulator_state.prev_actions(["acc_left", "acc_right"], 1)
         reward = MetricResult.create_and_validate(
             jax.lax.cond(
                 simulator_state.timestep > jnp.zeros_like(simulator_state.timestep),

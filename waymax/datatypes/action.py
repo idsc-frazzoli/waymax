@@ -153,23 +153,21 @@ class GoKartTrajectoryUpdate(TrajectoryUpdate):
     return Action(data=action, valid=self.valid)
 
 
-
-
 @chex.dataclass
-class GokartActionHistory:
+class GokartAction:
     """
     Data structure representing the action history of a gokart.
 
     Attributes:
 
-      steering_angle: The steering angle of the gokart at each time step of data type float32.
-      AB_L: The left front wheel position of the gokart at each time step of data type float32.
-      AB_R: The right front wheel position of the gokart at each time step of data type float32.
+      steering_angle: The steering angle of the gokart column data type float32.
+      acc_left: The left acceleration of the left wheel of the gokart at each time step of data type float32.
+      acc_right: The right acceleration of the left wheel of the gokart at each time step of data type float32.
     """
 
-    steering_angle: jax.Array
-    AB_L: jax.Array
-    AB_R: jax.Array
+    steering_angle: jax.Array # (..., num_objects, 1)
+    acc_left: jax.Array # (..., num_objects, 1)
+    acc_right: jax.Array # (..., num_objects, 1)
 
     @property
     def shape(self) -> tuple[int, ...]:
@@ -187,27 +185,28 @@ class GokartActionHistory:
         return self.shape[-1]
 
     @property
-    def AB_LR(self) -> jax.Array:
+    def acc_leftright(self) -> jax.Array:
         """Stacked AB action"""
-        return jnp.stack([self.AB_L, self.AB_R], axis=-1)
+        return jnp.stack([self.acc_left, self.acc_right], axis=-1)
 
     @property
-    def TV(self) -> jax.Array:
-        """Stacked Torque Vectoring indirect action (AB_R - AB_L)"""
-        return self.AB_R - self.AB_L
+    def torque_vectoring(self) -> jax.Array:
+        """Stacked Torque Vectoring indirect action (acc_right - acc_left)"""
+        return self.acc_right - self.acc_left
 
     @classproperty
     def action_fields(self) -> Sequence[str]:
         """Returns the action fields."""
-        return ["steering_angle", "AB_L", "AB_R"]
+        #todo there are better ways to do this
+        return ["steering_angle", "acc_left", "acc_right"]
 
     @classmethod
-    def zeros(cls, shape: Sequence[int]) -> "GokartActionHistory":
+    def zeros(cls, shape: Sequence[int]) -> "GokartAction":
         """Creates a Trajectory containing zeros of the specified shape."""
         return cls(
             steering_angle=jnp.zeros(shape, jnp.float32),
-            AB_L=jnp.zeros(shape, jnp.float32),
-            AB_R=jnp.zeros(shape, jnp.float32),
+            acc_left=jnp.zeros(shape, jnp.float32),
+            acc_right=jnp.zeros(shape, jnp.float32),
         )
 
     def __eq__(self, other: Any) -> bool:
@@ -217,12 +216,12 @@ class GokartActionHistory:
         """Returns a concatenated version of a set of field names for Trajectory."""
         return jnp.stack([getattr(self, field_name) for field_name in field_names], axis=-1)
     
-    def set_actions(self, action: Action, timestep: jax.typing.ArrayLike) -> "GokartActionHistory":
+    def set_actions(self, action: Action, timestep: jax.typing.ArrayLike) -> "GokartAction":
         """Return a new action history updated at timestep with the new action."""
         return self.replace(
             steering_angle=self.steering_angle.at[..., timestep].set(action.data[0]),
-            AB_L=self.AB_L.at[..., timestep].set(action.data[1]),
-            AB_R=self.AB_R.at[..., timestep].set(action.data[2]),
+            acc_left=self.acc_left.at[..., timestep].set(action.data[1]),
+            acc_right=self.acc_right.at[..., timestep].set(action.data[2]),
         )
 
     def validate(self):
@@ -230,15 +229,15 @@ class GokartActionHistory:
         chex.assert_equal_shape(
             [
                 self.steering_angle,
-                self.AB_L,
-                self.AB_R,
+                self.acc_left,
+                self.acc_right,
             ]
         )
         chex.assert_type(
             [
                 self.steering_angle,
-                self.AB_L,
-                self.AB_R,
+                self.acc_left,
+                self.acc_right,
             ],
             [
                 jnp.float32,

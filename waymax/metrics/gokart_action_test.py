@@ -2,9 +2,9 @@ import tensorflow as tf
 from absl.testing import parameterized
 from jax import numpy as jnp
 
-from waymax.metrics import GokartActionMetric, GokartActionRateMetric, GokartTVActionMetric
 from gocarx.utils.gokart_utils import create_init_state
 from waymax import datatypes
+from waymax.metrics import GokartActionMetric, GokartActionRateMetric, GokartTVActionMetric
 
 
 class GokartActionMetricTest(tf.test.TestCase, parameterized.TestCase):
@@ -73,7 +73,7 @@ class GokartActionMetricTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllClose(result.value, 0.931997)
 
     def test_throttle(self):
-        metric = GokartActionMetric(["AB_L", "AB_R"])
+        metric = GokartActionMetric(["acc_left", "acc_right"])
         state = create_init_state(num_timesteps=5)
         
         state.history_actions = state.history_actions.set_actions(
@@ -189,7 +189,7 @@ class GokartActionRateMetricTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllClose(result.value, 0.303601)
 
     def test_throttle_rate(self):
-        metric = GokartActionRateMetric(["AB_L", "AB_R"])
+        metric = GokartActionRateMetric(["acc_left", "acc_right"])
         state = create_init_state(num_timesteps=5)
         
         state.history_actions = state.history_actions.set_actions(

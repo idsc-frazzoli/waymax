@@ -2,8 +2,8 @@ import tensorflow as tf
 from absl.testing import parameterized
 
 from gocarx.env.track_config import TrackConfig, TrackType
-from waymax.metrics import GokartOffroadMetric, GokartDistanceToBoundsMetric
 from gocarx.utils.gokart_utils import create_init_state
+from waymax.metrics import GokartOffroadMetric, GokartDistanceToBoundsMetric
 
 
 class GokartOffroadMetricTest(tf.test.TestCase, parameterized.TestCase):
