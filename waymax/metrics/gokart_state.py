@@ -8,19 +8,20 @@ from waymax.metrics import abstract_metric, MetricResult
 class GokartStateMetric(abstract_metric.AbstractMetric):
     """State metric.
 
-    This metric returns a l kernel of a state of the gokart.
+    This metric returns the l-power of the l-norm of a state of the gokart
+    (||S||_l)^l = abs(s)^l
     """
 
     def __init__(self, state_name: str, l_ord: int = 2):
         """Initializes the state metric.
 
         Args:
-            l_ord: The order of the kernel to compute. Default is 2.
+            l_ord: The order of the metric to compute. Default is 2.
         """
         assert isinstance(state_name, str)
         assert isinstance(l_ord, int)
-        self.state_name = state_name
-        self.l_ord = l_ord
+        self._state_name = state_name
+        self._l_ord = l_ord
 
     @jax.named_scope("GokartStateMetric.compute")
     def compute(self, simulator_state: datatypes.GoKartSimState) -> MetricResult:
@@ -35,9 +36,9 @@ class GokartStateMetric(abstract_metric.AbstractMetric):
             trajectories. The shape is (..., num_objects).
         """
 
-        state_attr_curr = getattr(simulator_state.current_sim_trajectory, self.state_name)[..., 0, :]
+        state_attr_curr = getattr(simulator_state.current_sim_trajectory, self._state_name)[..., 0, :]
         reward = MetricResult.create_and_validate(
-            jnp.pow(jnp.abs(state_attr_curr), self.l_ord),
+            jnp.pow(jnp.abs(state_attr_curr), self._l_ord),
             jnp.ones(simulator_state.num_objects, dtype=jnp.bool_),
         )
 
@@ -59,9 +60,9 @@ class GokartStateOutRangeMetric(abstract_metric.AbstractMetric):
         assert isinstance(min_value, (float, int))
         assert isinstance(max_value, (float, int))
         assert min_value < max_value
-        self.state_name = state_name
-        self.min = min_value
-        self.max = max_value
+        self._state_name = state_name
+        self._min = min_value
+        self._max = max_value
 
     @jax.named_scope("GokartStateOutRangeMetric.compute")
     def compute(self, simulator_state: datatypes.GoKartSimState) -> MetricResult:
@@ -75,9 +76,9 @@ class GokartStateOutRangeMetric(abstract_metric.AbstractMetric):
           An array containing the metric result of the same shape as the input
             trajectories. The shape is (..., num_objects).
         """
-        state_attr_curr = getattr(simulator_state.current_sim_trajectory, self.state_name)[..., 0, :]
+        state_attr_curr = getattr(simulator_state.current_sim_trajectory, self._state_name)[..., 0, :]
         reward = MetricResult.create_and_validate(
-            jnp.logical_or(jnp.less(state_attr_curr, self.min), jnp.greater(state_attr_curr, self.max)).astype(
+            jnp.logical_or(jnp.less(state_attr_curr, self._min), jnp.greater(state_attr_curr, self._max)).astype(
                 jnp.float32
             ),
             jnp.ones(simulator_state.num_objects, dtype=jnp.bool_),
