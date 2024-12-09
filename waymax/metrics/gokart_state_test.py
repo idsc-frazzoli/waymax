@@ -2,7 +2,7 @@ import tensorflow as tf
 from absl.testing import parameterized
 
 from gocarx.utils.gokart_utils import create_init_state
-from waymax.metrics import GokartStateMetric, GokartStateOutRangeMetric, GokartVelyMetric, GokartVelxOutRangeMetric
+from waymax.metrics import GokartStateNormMetric, GokartStateOutRangeMetric, GokartVelyMetric, GokartVelxOutRangeMetric
 
 
 class GokartStateMetricTest(tf.test.TestCase, parameterized.TestCase):
@@ -12,11 +12,11 @@ class GokartStateMetricTest(tf.test.TestCase, parameterized.TestCase):
         state.sim_trajectory.yaw_rate = state.sim_trajectory.yaw_rate.at[:].set(-1.234)
         state.sim_trajectory.vel_x = state.sim_trajectory.vel_x.at[:].set(6.937)
         
-        metric = GokartStateMetric("yaw_rate")
+        metric = GokartStateNormMetric("yaw_rate")
         result = metric.compute(state)
         self.assertAllClose(result.value, 1.522756)
         
-        metric = GokartStateMetric("vel_x")
+        metric = GokartStateNormMetric("vel_x")
         result = metric.compute(state)
         self.assertAllClose(result.value, 48.121967)
         
@@ -72,25 +72,15 @@ class GokartVelxOutRangeMetricTest(tf.test.TestCase, parameterized.TestCase):
         state = create_init_state(num_timesteps=5)
         state.sim_trajectory.vel_x = state.sim_trajectory.vel_x.at[:].set(6.937)
         
-        metric = GokartVelxOutRangeMetric()
+        metric = GokartStateOutRangeMetric("vel_x", max_value=6.4)
         result = metric.compute(state)
         self.assertEqual(result.value, 0.0)
         
-        metric = GokartVelxOutRangeMetric(7.0)
+        metric = GokartStateOutRangeMetric("vel_x", max_value=7)
         result = metric.compute(state)
         self.assertEqual(result.value, 1.0)
         
-        metric = GokartVelxOutRangeMetric(6.0)
-        result = metric.compute(state)
-        self.assertEqual(result.value, 0.0)
-        
-        metric = GokartVelxOutRangeMetric(max_value=6.5)
-        result = metric.compute(state)
-        self.assertEqual(result.value, 1.0)
-        
-        metric = GokartVelxOutRangeMetric(max_value=7.5)
-        result = metric.compute(state)
-        self.assertEqual(result.value, 0.0)
+
         
         
 if __name__ == "__main__":

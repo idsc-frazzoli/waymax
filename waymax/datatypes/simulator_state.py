@@ -20,28 +20,22 @@ The validate function is implemented separately instead of as __post_init__, to
 have better support with jax utils.
 """
 
-from typing import Any, Optional, Sequence
+from typing import Any, Optional, Sequence, TypeVar, Generic
 
 import chex
 import jax
 import jax.numpy as jnp
 
 from waymax import config
-from waymax.datatypes import array
-from waymax.datatypes import action
-from waymax.datatypes import object_state
-from waymax.datatypes import operations
-from waymax.datatypes import roadgraph
-from waymax.datatypes import route
-from waymax.datatypes import traffic_lights
-
+from waymax.datatypes import array, action, object_state, operations, roadgraph, route, traffic_lights
+from waymax.datatypes.object_state import TrajectoryType
 
 ArrayLike = jax.typing.ArrayLike
 PyTree = array.PyTree
 
 
 @chex.dataclass
-class SimulatorState:
+class SimulatorState(Generic[TrajectoryType]):
     """A dataclass holding the simulator state, all data in global coordinates.
 
     Attributes:
@@ -62,9 +56,9 @@ class SimulatorState:
         points of shape (..., num_points).
     """
 
-    sim_trajectory: object_state.Trajectory
+    sim_trajectory: TrajectoryType
     # TODO Support testset, i.e. no log_trajectory for all steps.
-    log_trajectory: object_state.Trajectory
+    log_trajectory: TrajectoryType
     log_traffic_light: traffic_lights.TrafficLights
     object_metadata: object_state.ObjectMetadata
     timestep: jax.typing.ArrayLike
@@ -102,17 +96,23 @@ class SimulatorState:
         )  # pytype: disable=bad-return-type  # jnp-type
 
     @property
-    def current_sim_trajectory(self) -> object_state.Trajectory:
+    def current_sim_trajectory(self) -> TrajectoryType:
         """Returns the trajectory corresponding to the current sim state."""
         return operations.dynamic_slice(self.sim_trajectory, self.timestep, 1, axis=-1)
 
-    def __eq__(self, other: Any) -> bool:
-        return operations.compare_all_leaf_nodes(self, other)
+    @property
+    def previous_sim_trajectory(self) -> TrajectoryType:
+        """Returns the trajectory corresponding to the previous sim state."""
+        timestep = jnp.max(self.timestep - 1, 0)
+        return operations.dynamic_slice(self.sim_trajectory, timestep, 1, axis=-1)
 
     @property
-    def current_log_trajectory(self) -> object_state.Trajectory:
+    def current_log_trajectory(self) -> TrajectoryType:
         """Returns the trajectory corresponding to the current sim state."""
         return operations.dynamic_slice(self.log_trajectory, self.timestep, 1, axis=-1)
+
+    def __eq__(self, other: Any) -> bool:
+        return operations.compare_all_leaf_nodes(self, other)
 
     def validate(self):
         """Validates shape and type."""
@@ -129,23 +129,23 @@ class SimulatorState:
 
 
 @chex.dataclass
-class GoKartSimState(SimulatorState):
-    sim_trajectory: object_state.GokartTrajectory
-    log_trajectory: object_state.GokartTrajectory
-    sdc_paths: Optional[route.GoKartPaths] = None
+class GoKartSimState(SimulatorState[object_state.GokartTrajectory]):
+    #todo description of the use of sdc paths and so on
+    # sim_trajectory: object_state.GokartTrajectory
+    # log_trajectory: object_state.GokartTrajectory
     history_actions: Optional[action.GokartAction] = None
+    sdc_paths: Optional[route.GoKartPaths] = None
 
     @property
-    def prev_sim_trajectory(self) -> object_state.GokartTrajectory:
-        """Returns the trajectory corresponding to the previous sim state."""
-        return operations.dynamic_slice(self.sim_trajectory, jnp.max(self.timestep - 1, 0), 1, axis=-1)
+    def current_action_history(self) -> action.GokartAction:
+        """Returns the trajectory corresponding to the current sim state."""
+        return operations.dynamic_slice(self.history_actions, self.timestep, 1, axis=-1)
 
-    def prev_actions(self, field_names: Optional[Sequence[str]] = None, n: int = 1) -> jax.Array:
-        """Returns the last N actions."""
-        if field_names is None:
-            field_names = self.history_actions.action_fields
-        start_idx = jnp.maximum(self.timestep - n, 0)
-        return operations.dynamic_slice(self.history_actions, start_idx, n, axis=-1).stack_fields(field_names)
+    @property
+    def previous_action_history(self) -> action.GokartAction:
+        """Returns the trajectory corresponding to the previous sim state."""
+        timestep = jnp.max(self.timestep - 1, 0)
+        return operations.dynamic_slice(self.history_actions, timestep, 1, axis=-1)
 
     def __eq__(self, other: Any) -> bool:
         return operations.compare_all_leaf_nodes(self, other)

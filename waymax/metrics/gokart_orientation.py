@@ -11,7 +11,8 @@ class GokartOrientationMetric(abstract_metric.AbstractMetric):
     @jax.named_scope('GokartOrientationMetric.compute')
     def compute(self, state: datatypes.GoKartSimState) -> MetricResult:
         """
-        Computes the orientation reward. The car is rewarded for moving in the direction of the nearest point on the reference track(centerline).
+        Computes the orientation reward.
+        The car is rewarded for moving in the direction of the nearest point on the reference track(centerline).
 
         Args:
         state: The current state of the simulator.
