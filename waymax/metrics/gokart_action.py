@@ -13,21 +13,21 @@ class GokartActionMetric(abstract_metric.AbstractMetric):
     This metric returns a l kernel of the action taken by the gokart.
     """
 
-    def __init__(self, action_names: Optional[Sequence[str]] = None, l_ord: int = 2):
+    def __init__(self, action_names: Optional[Sequence[str]] = None, ord: int = 2):
         """Initializes the action metric.
 
         Args:
             action_names: The names of the actions to compute the metric for.
             If None, the metric is computed for all actions.
-            l_ord: The order of the kernel to compute. Default is 2.
+            ord: The order of the kernel to compute. Default is 2.
         """
         assert isinstance(action_names, (type(None), Sequence))
         assert not isinstance(action_names, str), "action_names should be a sequence of strings"
         if action_names is not None:
             assert all(isinstance(action_name, str) for action_name in action_names)
-        assert isinstance(l_ord, int)
+        assert isinstance(ord, int)
         self._action_names = action_names
-        self._l_ord = l_ord
+        self._ord = ord
 
     @jax.named_scope("GokartActionMetric.compute")
     def compute(self, simulator_state: datatypes.GoKartSimState) -> MetricResult:
@@ -45,7 +45,7 @@ class GokartActionMetric(abstract_metric.AbstractMetric):
         reward = MetricResult.create_and_validate(
             jax.lax.cond(
                 simulator_state.timestep > jnp.zeros_like(simulator_state.timestep),
-                lambda x: jnp.sum(jnp.pow(jnp.abs(x), self._l_ord)),
+                lambda x: jnp.sum(jnp.linalg.norm(x), self._ord),
                 lambda x: 0.0,
                 simulator_state.current_action_history.stack_fields(self._action_names),
             ),
@@ -113,15 +113,14 @@ class GokartTVActionMetric(abstract_metric.AbstractMetric):
     TV = acc_right - acc_left
     """
 
-    def __init__(self, l_ord: int = 2):
+    def __init__(self, ord: int = 2):
         """Initializes the action metric.
 
         Args:
-            action_idxs: The indices of the actions to compute the metric for. If None, the metric is computed for all actions.
-            l_ord: The order of the norm to compute. Default is 2.
+            ord: The order of the norm to compute. Default is 2.
         """
-        assert isinstance(l_ord, int)
-        self.l_ord = l_ord
+        assert isinstance(ord, int)
+        self._ord = ord
 
     @jax.named_scope("GokartTVActionMetric.compute")
     def compute(self, simulator_state: datatypes.GoKartSimState) -> MetricResult:
@@ -140,7 +139,7 @@ class GokartTVActionMetric(abstract_metric.AbstractMetric):
         reward = MetricResult.create_and_validate(
             jax.lax.cond(
                 simulator_state.timestep > jnp.zeros_like(simulator_state.timestep),
-                lambda x: jnp.pow(jnp.abs(x), self.l_ord),
+                lambda x: jnp.pow(jnp.abs(x), self._ord),
                 lambda x: 0.0,
                 tv.squeeze(),
             ),
