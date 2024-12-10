@@ -362,8 +362,6 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
         Returns:
           The next simulation state after taking an action of shape (...).
         """
-        
-        new_history_actions = state.history_actions.set_actions(action, state.timestep)
                 
         planning_agent_action = self._planning_agent_dynamics.compute_update(
             action, state.current_sim_trajectory
@@ -410,9 +408,15 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
             timestep=state.timestep,
             allow_object_injection=self.config.allow_new_objects_after_warmup,
         )
+        new_timestep = state.timestep + 1
+        new_history_actions = jax.lax.cond(state.remaining_timesteps > 0,
+                    state.history_actions.set_actions,
+                    lambda act, ts: state.history_actions,
+                    action, new_timestep)
+
         return state.replace(
             sim_trajectory=new_traj,
-            timestep=state.timestep + 1,
+            timestep=new_timestep,
             history_actions=new_history_actions,
             sim_agent_actor_states=updated_sim_agent_actor_states,
         )

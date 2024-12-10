@@ -15,13 +15,13 @@
 """Data structures for trajectory and metadata information for scene objects."""
 from collections.abc import Sequence
 import enum
-from typing import Any
+from typing import Any, TypeVar
 
 import chex
 import jax
 from jax import numpy as jnp
 
-from waymax.datatypes import operations, Action
+from waymax.datatypes import operations, Action, PyTree
 from waymax.utils import geometry
 from waymax.utils.classproperty import classproperty
 
@@ -297,6 +297,7 @@ class Trajectory:
             ],
         )
 
+TrajectoryType = TypeVar("TrajectoryType", bound=Trajectory)
 
 @chex.dataclass
 class GokartTrajectory(Trajectory):
@@ -388,7 +389,7 @@ class GokartTrajectory(Trajectory):
         )
 
 
-def fill_invalid_trajectory(traj: Trajectory) -> Trajectory:
+def fill_invalid_trajectory(traj: TrajectoryType) -> TrajectoryType:
     """Fills a trajectory with invalid values.
 
     An invalid value is -1 for numerical fields and False for booleans.

@@ -1,3 +1,4 @@
+from typing import Optional, Sequence, Union
 import jax
 from jax import numpy as jnp
 
@@ -5,25 +6,27 @@ from waymax import datatypes
 from waymax.metrics import abstract_metric, MetricResult
 
 
-class GokartStateMetric(abstract_metric.AbstractMetric):
+class GokartStateNormMetric(abstract_metric.AbstractMetric):
     """State metric.
 
-    This metric returns the l-power of the l-norm of a state of the gokart
-    (||S||_l)^l = abs(s)^l
+    This metric returns the l-norm of the state of the gokart
     """
 
-    def __init__(self, state_name: str, l_ord: int = 2):
+    def __init__(self, state_names: Union[str, Sequence[str]], ord: int = 2):
         """Initializes the state metric.
 
         Args:
-            l_ord: The order of the metric to compute. Default is 2.
+            ord: The order of the norm to compute. Default is 2.
         """
-        assert isinstance(state_name, str)
-        assert isinstance(l_ord, int)
-        self._state_name = state_name
-        self._l_ord = l_ord
+        assert isinstance(state_names, (Sequence, str))
+        if isinstance(state_names, str):
+            state_names = [state_names]
+        assert all(isinstance(state_name, str) for state_name in state_names)
+        assert isinstance(ord, int)
+        self._state_names: Sequence[str] = state_names
+        self._ord: int = ord
 
-    @jax.named_scope("GokartStateMetric.compute")
+    @jax.named_scope("GokartStateNormMetric.compute")
     def compute(self, simulator_state: datatypes.GoKartSimState) -> MetricResult:
         """Computes a state metric.
 
@@ -36,13 +39,13 @@ class GokartStateMetric(abstract_metric.AbstractMetric):
             trajectories. The shape is (..., num_objects).
         """
 
-        state_attr_curr = getattr(simulator_state.current_sim_trajectory, self._state_name)[..., 0, :]
         reward = MetricResult.create_and_validate(
-            jnp.pow(jnp.abs(state_attr_curr), self._l_ord),
-            jnp.ones(simulator_state.num_objects, dtype=jnp.bool_),
+            jnp.linalg.norm(simulator_state.current_sim_trajectory.stack_fields(self._state_names)[..., 0, :],
+                            self._ord, axis=-1).squeeze(),
+            jnp.ones(simulator_state.num_objects, dtype=jnp.bool_).squeeze(-1),
         )
 
-        return reward.replace(value=jnp.squeeze(reward.value, axis=-1), valid=jnp.squeeze(reward.valid, axis=-1))
+        return reward
 
 class GokartStateOutRangeMetric(abstract_metric.AbstractMetric):
     """State metric.
@@ -50,19 +53,24 @@ class GokartStateOutRangeMetric(abstract_metric.AbstractMetric):
     This metric returns 1.0 if the state of the gokart is out of the given range.
     """
 
-    def __init__(self, state_name: str, min_value: float = -jnp.inf, max_value: float = jnp.inf):
+    def __init__(self, state_names: Union[str, Sequence[str]], min_value: float = -jnp.inf, max_value: float = jnp.inf):
         """Initializes the state metric.
 
         Args:
-            l_ord: The order of the norm to compute. Default is 2.
+            state_names (Union[str, Sequence[str]]): The names of the states to compute the metric for.
+            min_value (float): The minimum value of the states.
+            max_value (float): The maximum value of the states.
         """
-        assert isinstance(state_name, str)
+        assert isinstance(state_names, (str, Sequence))
         assert isinstance(min_value, (float, int))
         assert isinstance(max_value, (float, int))
         assert min_value < max_value
-        self._state_name = state_name
-        self._min = min_value
-        self._max = max_value
+        if isinstance(state_names, str):
+            state_names = [state_names]
+        assert all(isinstance(state_name, str) for state_name in state_names)
+        self._state_names: Sequence[str] = state_names
+        self._min: float = min_value
+        self._max: float = max_value
 
     @jax.named_scope("GokartStateOutRangeMetric.compute")
     def compute(self, simulator_state: datatypes.GoKartSimState) -> MetricResult:
@@ -76,12 +84,12 @@ class GokartStateOutRangeMetric(abstract_metric.AbstractMetric):
           An array containing the metric result of the same shape as the input
             trajectories. The shape is (..., num_objects).
         """
-        state_attr_curr = getattr(simulator_state.current_sim_trajectory, self._state_name)[..., 0, :]
+        state_attr = simulator_state.current_sim_trajectory.stack_fields(self._state_names)[..., 0, :]
         reward = MetricResult.create_and_validate(
-            jnp.logical_or(jnp.less(state_attr_curr, self._min), jnp.greater(state_attr_curr, self._max)).astype(
+            jnp.any(jnp.logical_or(jnp.less(state_attr, self._min), jnp.greater(state_attr, self._max))).astype(
                 jnp.float32
-            ),
-            jnp.ones(simulator_state.num_objects, dtype=jnp.bool_),
+            ).squeeze(),
+            jnp.ones(simulator_state.num_objects, dtype=jnp.bool_).squeeze(-1),
         )
 
-        return reward.replace(value=jnp.squeeze(reward.value, axis=-1), valid=jnp.squeeze(reward.valid, axis=-1))
+        return reward

@@ -20,7 +20,7 @@ from waymax.metrics.imitation import LogDivergenceMetric
 from waymax.metrics.metric_factory import get_metric_names
 from waymax.metrics.metric_factory import register_metric
 from waymax.metrics.metric_factory import run_metrics
-from waymax.metrics.metric_factory import get_metric_type
+from waymax.metrics.metric_factory import update_metrics_registry
 from waymax.metrics.overlap import OverlapMetric
 from waymax.metrics.roadgraph import OffroadMetric
 from waymax.metrics.roadgraph import WrongWayMetric
@@ -30,10 +30,9 @@ from waymax.metrics.gokart_progress import GokartProgressMetric
 from waymax.metrics.gokart_orientation import GokartOrientationMetric
 from waymax.metrics.gokart_offroad import GokartOffroadMetric
 from waymax.metrics.gokart_offroad import GokartDistanceToBoundsMetric
-from waymax.metrics.gokart_action import GokartActionMetric
-from waymax.metrics.gokart_action import GokartActionMetric
-from waymax.metrics.gokart_action import GokartActionRateMetric
-from waymax.metrics.gokart_action import GokartActionRateMetric
-from waymax.metrics.gokart_action import GokartTVActionMetric
-from waymax.metrics.gokart_state import GokartStateMetric
+from waymax.metrics.gokart_action import GokartActionNormMetric
+from waymax.metrics.gokart_action import GokartActionOutRangeMetric
+from waymax.metrics.gokart_action import GokartActionRateNormMetric
+from waymax.metrics.gokart_action import GokartTVActionNormMetric
+from waymax.metrics.gokart_state import GokartStateNormMetric
 from waymax.metrics.gokart_state import GokartStateOutRangeMetric

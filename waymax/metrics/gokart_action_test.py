@@ -4,12 +4,12 @@ from jax import numpy as jnp
 
 from gocarx.utils.gokart_utils import create_init_state
 from waymax import datatypes
-from waymax.metrics import GokartActionMetric, GokartActionRateMetric, GokartTVActionMetric
+from waymax.metrics import GokartActionNormMetric, GokartActionRateNormMetric, GokartTVActionNormMetric, GokartActionOutRangeMetric
 
 
-class GokartActionMetricTest(tf.test.TestCase, parameterized.TestCase):
+class GokartActionNormMetricTest(tf.test.TestCase, parameterized.TestCase):
     def test_actions(self):
-        metric = GokartActionMetric()
+        metric = GokartActionNormMetric()
         state = create_init_state(num_timesteps=5)
         
         state.history_actions = state.history_actions.set_actions(
@@ -22,23 +22,20 @@ class GokartActionMetricTest(tf.test.TestCase, parameterized.TestCase):
             datatypes.Action(data=jnp.array([-0.9654, 0.676, -0.232]), valid=jnp.ones((1, 3))), 2
         )
 
+        state.timestep = 0
         result = metric.compute(state)
         self.assertEqual(result.value, 0.0)
 
         state.timestep = 1
         result = metric.compute(state)
-        self.assertEqual(result.value, 0.0)
+        self.assertAllClose(result.value, 0.374165)
 
         state.timestep = 2
         result = metric.compute(state)
-        self.assertAllClose(result.value, 0.14)
-
-        state.timestep = 3
-        result = metric.compute(state)
-        self.assertAllClose(result.value, 1.442797)
+        self.assertAllClose(result.value, 1.201164)
 
     def test_steering(self):
-        metric = GokartActionMetric(["steering_angle"])
+        metric = GokartActionNormMetric(["steering_angle"])
         state = create_init_state(num_timesteps=5)
         
         state.history_actions = state.history_actions.set_actions(
@@ -57,23 +54,20 @@ class GokartActionMetricTest(tf.test.TestCase, parameterized.TestCase):
             datatypes.Action(data=jnp.array([0.382, 0.39, -0.54]), valid=jnp.ones((1, 3))), 4
         )
 
+        state.timestep = 0
         result = metric.compute(state)
         self.assertEqual(result.value, 0.0)
 
         state.timestep = 1
         result = metric.compute(state)
-        self.assertEqual(result.value, 0.0)
+        self.assertAllClose(result.value, 0.1)
 
         state.timestep = 2
         result = metric.compute(state)
-        self.assertAllClose(result.value, 0.01)
-
-        state.timestep = 3
-        result = metric.compute(state)
-        self.assertAllClose(result.value, 0.931997)
+        self.assertAllClose(result.value, 0.965399)
 
     def test_throttle(self):
-        metric = GokartActionMetric(["acc_left", "acc_right"])
+        metric = GokartActionNormMetric(["acc_left", "acc_right"])
         state = create_init_state(num_timesteps=5)
         
         state.history_actions = state.history_actions.set_actions(
@@ -92,26 +86,23 @@ class GokartActionMetricTest(tf.test.TestCase, parameterized.TestCase):
             datatypes.Action(data=jnp.array([-0.28, 0.39, -0.54]), valid=jnp.ones((1, 3))), 4
         )
 
+        state.timestep = 0
         result = metric.compute(state)
         self.assertEqual(result.value, 0.0)
 
         state.timestep = 1
         result = metric.compute(state)
-        self.assertEqual(result.value, 0.0)
+        self.assertAllClose(result.value, 0.360555)
 
         state.timestep = 2
         result = metric.compute(state)
-        self.assertAllClose(result.value, 0.13)
-
-        state.timestep = 3
-        result = metric.compute(state)
-        self.assertEqual(result.value, 0.5108)
+        self.assertAllClose(result.value, 0.714702)
 
 
-class GokartActionRateMetricTest(tf.test.TestCase, parameterized.TestCase):
+class GokartActionRateNormMetricTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_action_rates(self):
-        metric = GokartActionRateMetric()
+        metric = GokartActionRateNormMetric()
         state = create_init_state(num_timesteps=5)
         
         state.history_actions = state.history_actions.set_actions(
@@ -130,27 +121,28 @@ class GokartActionRateMetricTest(tf.test.TestCase, parameterized.TestCase):
             datatypes.Action(data=jnp.array([-0.629, 0.123, -0.654]), valid=jnp.ones((1, 3))), 4
         )
         
+        state.timestep = 0
         result = metric.compute(state)
         self.assertEqual(result.value, 0.0)
 
         state.timestep = 1
         result = metric.compute(state)
-        self.assertEqual(result.value, 0.0)
+        self.assertAllClose(result.value, 0.943398)
 
         state.timestep = 2
         result = metric.compute(state)
-        self.assertAllClose(result.value, 0.89)
+        self.assertAllClose(result.value, 1.576150)
 
         state.timestep = 3
         result = metric.compute(state)
-        self.assertAllClose(result.value, 2.4842489999999997)
+        self.assertAllClose(result.value, 0.983978)
 
         state.timestep = 4
         result = metric.compute(state)
-        self.assertAllClose(result.value, 0.9682130000000002)
+        self.assertAllClose(result.value, 0.874427)
 
     def test_steering_rate(self):
-        metric = GokartActionRateMetric(["steering_angle"])
+        metric = GokartActionRateNormMetric(["steering_angle"])
         state = create_init_state(num_timesteps=5)
         
         state.history_actions = state.history_actions.set_actions(
@@ -169,27 +161,24 @@ class GokartActionRateMetricTest(tf.test.TestCase, parameterized.TestCase):
             datatypes.Action(data=jnp.array([-0.812, 0.123, -0.654]), valid=jnp.ones((1, 3))), 4
         )
 
+        state.timestep = 0
         result = metric.compute(state)
         self.assertEqual(result.value, 0.0)
 
         state.timestep = 1
         result = metric.compute(state)
-        self.assertEqual(result.value, 0.0)
+        self.assertAllClose(result.value, 0.3)
 
         state.timestep = 2
         result = metric.compute(state)
-        self.assertAllClose(result.value, 0.09)
+        self.assertAllClose(result.value, 1.054)
 
         state.timestep = 3
         result = metric.compute(state)
-        self.assertAllClose(result.value, 1.110916)
-
-        state.timestep = 4
-        result = metric.compute(state)
-        self.assertAllClose(result.value, 0.303601)
+        self.assertAllClose(result.value, 0.551)
 
     def test_throttle_rate(self):
-        metric = GokartActionRateMetric(["acc_left", "acc_right"])
+        metric = GokartActionRateNormMetric(["acc_left", "acc_right"])
         state = create_init_state(num_timesteps=5)
         
         state.history_actions = state.history_actions.set_actions(
@@ -208,31 +197,28 @@ class GokartActionRateMetricTest(tf.test.TestCase, parameterized.TestCase):
             datatypes.Action(data=jnp.array([-0.812, 0.123, -0.654]), valid=jnp.ones((1, 3))), 4
         )
 
+        state.timestep = 0
         result = metric.compute(state)
         self.assertEqual(result.value, 0.0)
 
         state.timestep = 1
         result = metric.compute(state)
-        self.assertEqual(result.value, 0.0)
+        self.assertAllClose(result.value, 0.894427)
 
         state.timestep = 2
         result = metric.compute(state)
-        self.assertAllClose(result.value, 0.8)
+        self.assertAllClose(result.value, 1.171892)
 
         state.timestep = 3
         result = metric.compute(state)
-        self.assertAllClose(result.value, 1.373332)
-
-        state.timestep = 4
-        result = metric.compute(state)
-        self.assertAllClose(result.value, 0.664612)
+        self.assertAllClose(result.value, 0.815237)
 
 
-class GokartTVActionMetricTest(tf.test.TestCase, parameterized.TestCase):
+class GokartTVActionNormMetricTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_tv_action(self):
 
-        metric = GokartTVActionMetric()
+        metric = GokartTVActionNormMetric()
         state = create_init_state(num_timesteps=5)
         
         state.history_actions = state.history_actions.set_actions(
@@ -247,25 +233,52 @@ class GokartTVActionMetricTest(tf.test.TestCase, parameterized.TestCase):
         state.history_actions = state.history_actions.set_actions(
             datatypes.Action(data=jnp.array([0.54, -0.843, 0.123]), valid=jnp.ones((1, 3))), 3
         )
-        state.history_actions = state.history_actions.set_actions(
-            datatypes.Action(data=jnp.array([-0.28, 0.39, -0.54]), valid=jnp.ones((1, 3))), 4
-        )
 
+        state.timestep = 0
         result = metric.compute(state)
         self.assertEqual(result.value, 0.0)
 
         state.timestep = 1
         result = metric.compute(state)
-        self.assertEqual(result.value, 0.0)
+        self.assertAllClose(result.value, 0.1)
 
         state.timestep = 2
         result = metric.compute(state)
-        self.assertAllClose(result.value, 0.01)
+        self.assertAllClose(result.value, 0.908)
 
-        state.timestep = 3
+class GokartActionOutRangeMetricTest(tf.test.TestCase, parameterized.TestCase):
+    
+    def test(self):
+        state = create_init_state(num_timesteps=5)
+        state.history_actions = state.history_actions.set_actions(
+            datatypes.Action(data=jnp.array([-1.9654, 0.676, 1.232]), valid=jnp.ones((1, 3))), 2
+        )
+        
+        state.timestep = 2
+        
+        metric = GokartActionOutRangeMetric("steering_angle")
         result = metric.compute(state)
-        self.assertAllClose(result.value, 0.824464)
-
+        self.assertEqual(result.value, 0.0)
+        
+        metric = GokartActionOutRangeMetric("steering_angle", -1.0, 1.0)
+        result = metric.compute(state)
+        self.assertEqual(result.value, 1.0)
+        
+        metric = GokartActionOutRangeMetric("acc_left")
+        result = metric.compute(state)
+        self.assertEqual(result.value, 0.0)
+        
+        metric = GokartActionOutRangeMetric("acc_left", max_value=0.5)
+        result = metric.compute(state)
+        self.assertEqual(result.value, 1.0)
+        
+        metric = GokartActionOutRangeMetric(["acc_left", "acc_right"], -1.0)
+        result = metric.compute(state)
+        self.assertEqual(result.value, 0.0)
+        
+        metric = GokartActionOutRangeMetric(["acc_left", "acc_right"], 0.7)
+        result = metric.compute(state)
+        self.assertEqual(result.value, 1.0)
 
 if __name__ == "__main__":
     tf.test.main()

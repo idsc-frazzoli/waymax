@@ -2,7 +2,6 @@ import dataclasses
 
 import tensorflow as tf
 from absl.testing import parameterized
-from gocarx.metrics.gokart_progress import GokartProgressMetric
 from jax import numpy as jnp
 
 from gocarx.dynamics.gokart_config import GoKartGeometry, PajieckaParams, TricycleParams
@@ -10,6 +9,7 @@ from gocarx.dynamics.tricycle_model import TricycleModel
 from gocarx.env import GokartRacingEnvironment
 from gocarx.utils.gokart_utils import create_init_state
 from waymax import config as _config, datatypes
+from waymax.metrics import GokartProgressMetric
 
 
 class GokartProgressMetricTest(tf.test.TestCase, parameterized.TestCase):

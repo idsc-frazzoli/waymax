@@ -2,7 +2,7 @@ import tensorflow as tf
 from absl.testing import parameterized
 
 from gocarx.utils.gokart_utils import create_init_state
-from waymax.metrics import GokartStateMetric, GokartStateOutRangeMetric
+from waymax.metrics import GokartStateNormMetric, GokartStateOutRangeMetric
 
 
 class GokartStateMetricTest(tf.test.TestCase, parameterized.TestCase):
@@ -15,17 +15,17 @@ class GokartStateMetricTest(tf.test.TestCase, parameterized.TestCase):
         
         state.timestep = 2
         
-        metric = GokartStateMetric("yaw_rate")
+        metric = GokartStateNormMetric("yaw_rate")
         result = metric.compute(state)
-        self.assertAllClose(result.value, 1.522756)
+        self.assertAllClose(result.value, 1.234)
         
-        metric = GokartStateMetric("vel_x")
+        metric = GokartStateNormMetric("vel_x")
         result = metric.compute(state)
-        self.assertAllClose(result.value, 48.121967)
+        self.assertAllClose(result.value, 6.937)
         
-        metric = GokartStateMetric("vel_y")
+        metric = GokartStateNormMetric("vel_y")
         result = metric.compute(state)
-        self.assertAllClose(result.value, 6.723649)
+        self.assertAllClose(result.value, 2.593)
         
 class GokartStateOutRangeMetricTest(tf.test.TestCase, parameterized.TestCase):
     
@@ -55,6 +55,18 @@ class GokartStateOutRangeMetricTest(tf.test.TestCase, parameterized.TestCase):
         metric = GokartStateOutRangeMetric("vel_y", max_value=7.5)
         result = metric.compute(state)
         self.assertEqual(result.value, 0.0)
+        
+        metric = GokartStateOutRangeMetric(["yaw_rate", "vel_y"], -1.25)
+        result = metric.compute(state)
+        self.assertEqual(result.value, 0.0)
+        
+        metric = GokartStateOutRangeMetric(["yaw_rate", "vel_y"], max_value=6.0)
+        result = metric.compute(state)
+        self.assertEqual(result.value, 1.0)
+        
+        metric = GokartStateOutRangeMetric(["yaw_rate", "vel_y"], min_value= -1, max_value=7.0)
+        result = metric.compute(state)
+        self.assertEqual(result.value, 1.0)
         
         
 if __name__ == "__main__":
