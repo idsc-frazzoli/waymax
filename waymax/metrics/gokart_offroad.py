@@ -1,3 +1,4 @@
+from re import X
 import jax
 from jax import numpy as jnp
 
@@ -51,17 +52,15 @@ class GokartDistanceToBoundsMetric(abstract_metric.AbstractMetric):
     """Distance to bounds metric.
 
     This metric returns 0 if the object is farther than safety_margin from the boundary, and
-    (1-distance_bound/safety_margin)**2 if it is closer, with a maximum value of 1 if the object is
-    at the boundary. Moreover, an additional reward can be given when the object is offroad
-    (without considering the safety_margin).  """
+    safety_margin-min_distance_bounds if it is closer. Moreover, an additional reward can be
+    given when the object is offroad (without considering the safety_margin)."""
 
     def __init__(self, safety_margin: float = 0.0, additional_offroad_reward: float = 0.0):
         """Initializes the offroad metric.
 
         Args:
             safety_margin: the metric will be 0 if the object is farther than this distance from the boundary.
-                Otherwise, it will be (1-distance_bound/safety_margin)**2, with a maximum value of 1 if the object is
-                at the boundary.
+                Otherwise, it will be safety_margin-distance_bound.
             additional_offroad_reward: additional reward given when the object is offroad (without
                 considering the safety_margin).
         """
@@ -70,7 +69,7 @@ class GokartDistanceToBoundsMetric(abstract_metric.AbstractMetric):
         self.safety_margin = safety_margin
         self.additional_offroad_reward = additional_offroad_reward
 
-    @jax.named_scope("GokartOffroadMetric.compute")
+    @jax.named_scope("GokartDistanceToBoundsMetric.compute")
     def compute(self, state: datatypes.SimulatorState) -> abstract_metric.MetricResult:
         """Computes the distance to bounds metric. The minimum distance to the boundary is used.
 
@@ -95,7 +94,7 @@ class GokartDistanceToBoundsMetric(abstract_metric.AbstractMetric):
         min_distance = jnp.expand_dims(jnp.min(jnp.abs(signed_distances.clip(max=0.0))), axis=0)
         metric_value = jax.lax.cond(
             min_distance[0] < self.safety_margin,
-            lambda x: ((1 - x/self.safety_margin) ** 2),
+            lambda x: self.safety_margin - x,
             jnp.zeros_like,
             min_distance,
         ) + offroad * self.additional_offroad_reward

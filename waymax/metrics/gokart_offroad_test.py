@@ -40,17 +40,25 @@ class GokartDistanceToBoundsMetricTest(tf.test.TestCase, parameterized.TestCase)
         state.sim_trajectory.y += -1.25
         metric = GokartDistanceToBoundsMetric(safety_margin=0.75, additional_offroad_reward=4.5)
         result = metric.compute(state)
-        self.assertAllClose(result.value, 0.00011847)
+        self.assertAllClose(result.value, 0.008163)
         
         state.sim_trajectory.y += -0.5
         metric = GokartDistanceToBoundsMetric(safety_margin=0.75, additional_offroad_reward=4.5)
         result = metric.compute(state)
-        self.assertAllClose(result.value, 0.451832)
+        self.assertAllClose(result.value, 0.504138)
+        
+        metric = GokartDistanceToBoundsMetric(safety_margin=0.75, additional_offroad_reward=0)
+        result = metric.compute(state)
+        self.assertAllClose(result.value, 0.504138)
         
         state.sim_trajectory.y += -5.0
         metric = GokartDistanceToBoundsMetric(safety_margin=0.75, additional_offroad_reward=4.5)
         result = metric.compute(state)
-        self.assertAllClose(result.value, 5.5)
+        self.assertAllClose(result.value, 5.25)
+        
+        metric = GokartDistanceToBoundsMetric(safety_margin=0.75, additional_offroad_reward=0)
+        result = metric.compute(state)
+        self.assertAllClose(result.value, 0.75)
         
 
 if __name__ == "__main__":
