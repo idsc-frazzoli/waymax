@@ -60,12 +60,11 @@ class GokartDistanceToBoundsMetric(abstract_metric.AbstractMetric):
         """Initializes the offroad metric.
 
         Args:
-            offroad_value: additional reward given when the object is offroad (without
-                considering the safety_margin).
+            offroad_value: default value for when the object is offroad.
+            This can be used as an extra reward for being offroad
         """
-        assert isinstance(offroad_value, (float, int))
         assert offroad_value is None or offroad_value < 0
-        self.offroad_value = offroad_value
+        self._offroad_value = offroad_value
 
     @jax.named_scope("GokartDistanceToBoundsMetric.compute")
     def compute(self, state: datatypes.SimulatorState) -> abstract_metric.MetricResult:
@@ -90,14 +89,17 @@ class GokartDistanceToBoundsMetric(abstract_metric.AbstractMetric):
         )
         # todo verify dimension here
         # If the value is negative, it means that the actor is offroad
-        metric_value = jax.lax.cond(
-            self.offroad_value is None,
-            lambda x: jnp.where(distances<0, jnp.ones_like(distances)*self.offroad_value, distances),
-            lambda x: x,
-        )
+        if self._offroad_value is not None:
+            distances = jnp.where(distances <= 0, jnp.ones_like(distances) * self._offroad_value, distances)
+        # metric_value = jax.lax.cond(
+        #         self._offroad_value is None,
+        #         lambda x: x,
+        #     lambda x: jnp.where(distances <= 0, jnp.ones_like(distances) * self._offroad_value, distances),
+        #         distances
+        # )
         # todo select object of interest
 
-        valid = jnp.ones_like(metric_value, dtype=jnp.bool_)
-        metric = abstract_metric.MetricResult.create_and_validate(metric_value.astype(jnp.float32), valid)
+        valid = jnp.ones_like(distances, dtype=jnp.bool_)
+        metric = abstract_metric.MetricResult.create_and_validate(distances.astype(jnp.float32), valid)
 
         return metric.replace(value=jnp.squeeze(metric.value, axis=-1), valid=jnp.squeeze(metric.valid, axis=-1))

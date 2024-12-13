@@ -183,8 +183,8 @@ def compute_signed_distance_object_to_nearest_road_edge_point(
     # Shape: (..., num_objects, num_corners=4).
     distances = jnp.reshape(distances, [*shape_prefix, num_agents, num_points])
     # Shape: (..., num_objects).
-    #todo verify returned shape
-    return distances.min(axis=-1)
+    #todo verify returned shape and if max works when we are offroad
+    return distances.max(axis=-1)
 
 
 def compute_signed_distance_to_nearest_road_edge_point(
