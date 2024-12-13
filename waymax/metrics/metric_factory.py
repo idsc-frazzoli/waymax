@@ -33,7 +33,7 @@ from waymax.metrics import gokart_state
 
 _METRICS_DEFAULT_ARGS: dict[str, dict[str, Any]] = {
     "gokart_offroad": {"safety_margin": 0.0},
-    "gokart_distance_to_bounds": {"safety_margin": 0.3, "additional_offroad_reward": 0},
+    "gokart_distance_to_bounds": {"offroad_value": -1},
     "gokart_vel_x": {"state_names": "vel_x"},
     "gokart_vel_y": {"state_names": "vel_y"},
     "gokart_vel_xy": {"state_names": ["vel_x", "vel_y"]},

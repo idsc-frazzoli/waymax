@@ -1,9 +1,11 @@
+from typing import Optional
+
 import jax
 from jax import numpy as jnp
 
 from waymax import datatypes
 from waymax.metrics import abstract_metric
-from waymax.metrics.roadgraph import is_offroad
+from waymax.metrics.roadgraph import is_offroad, compute_signed_distance_object_to_nearest_road_edge_point
 
 
 class GokartOffroadMetric(abstract_metric.AbstractMetric):
@@ -20,7 +22,7 @@ class GokartOffroadMetric(abstract_metric.AbstractMetric):
                 is equal or less than this value.
         """
         assert isinstance(safety_margin, (float, int))
-        self.safety_margin = safety_margin
+        self._safety_margin = safety_margin
 
     @jax.named_scope("GokartOffroadMetric.compute")
     def compute(self, state: datatypes.SimulatorState) -> abstract_metric.MetricResult:
@@ -40,7 +42,7 @@ class GokartOffroadMetric(abstract_metric.AbstractMetric):
             1,
             -1,
         )
-        offroad = is_offroad(current_object_state, state.roadgraph_points, self.safety_margin)
+        offroad = is_offroad(current_object_state, state.roadgraph_points, self._safety_margin)
         valid = jnp.ones_like(offroad, dtype=jnp.bool_)
         metric = abstract_metric.MetricResult.create_and_validate(offroad.astype(jnp.float32), valid)
 
@@ -50,23 +52,20 @@ class GokartOffroadMetric(abstract_metric.AbstractMetric):
 class GokartDistanceToBoundsMetric(abstract_metric.AbstractMetric):
     """Distance to bounds metric.
 
-    This metric returns 0 if the object is farther than safety_margin from the boundary, and
-    safety_margin-min_distance_bounds if it is closer. Moreover, an additional reward can be
+    This metric returns the distance of the objects from the closest boundary (edge).
+    If the object is offroad, the value can be forced to be a specific value (e.g. -1).
     given when the object is offroad (without considering the safety_margin)."""
 
-    def __init__(self, safety_margin: float = 0.0, additional_offroad_reward: float = 0.0):
+    def __init__(self, offroad_value: Optional[float] = None):
         """Initializes the offroad metric.
 
         Args:
-            safety_margin: the metric will be 0 if the object is farther than this distance from the boundary.
-                Otherwise, it will be safety_margin-distance_bound.
-            additional_offroad_reward: additional reward given when the object is offroad (without
+            offroad_value: additional reward given when the object is offroad (without
                 considering the safety_margin).
         """
-        assert isinstance(safety_margin, (float, int))
-        assert isinstance(additional_offroad_reward, (float, int))
-        self.safety_margin = safety_margin
-        self.additional_offroad_reward = additional_offroad_reward
+        assert isinstance(offroad_value, (float, int))
+        assert offroad_value is None or offroad_value < 0
+        self.offroad_value = offroad_value
 
     @jax.named_scope("GokartDistanceToBoundsMetric.compute")
     def compute(self, state: datatypes.SimulatorState) -> abstract_metric.MetricResult:
@@ -86,17 +85,18 @@ class GokartDistanceToBoundsMetric(abstract_metric.AbstractMetric):
             1,
             -1,
         )
-        signed_distances = is_offroad(current_object_state, state.roadgraph_points, self.safety_margin, return_mask=False)
-        offroad = jnp.any(signed_distances > 0.0, axis=-1)
-        # If the value is negative, it means that the actor is on the correct side of the road, if it is positive, it is
-        # considered `offroad`.
-        min_distance = jnp.expand_dims(jnp.min(jnp.abs(signed_distances.clip(max=0.0))), axis=0)
+        distances = - compute_signed_distance_object_to_nearest_road_edge_point(
+                current_object_state, state.roadgraph_points
+        )
+        # todo verify dimension here
+        # If the value is negative, it means that the actor is offroad
         metric_value = jax.lax.cond(
-            min_distance[0] < self.safety_margin,
-            lambda x: self.safety_margin - x,
-            jnp.zeros_like,
-            min_distance,
-        ) + offroad * self.additional_offroad_reward
+            self.offroad_value is None,
+            lambda x: jnp.where(distances<0, jnp.ones_like(distances)*self.offroad_value, distances),
+            lambda x: x,
+        )
+        # todo select object of interest
+
         valid = jnp.ones_like(metric_value, dtype=jnp.bool_)
         metric = abstract_metric.MetricResult.create_and_validate(metric_value.astype(jnp.float32), valid)
 

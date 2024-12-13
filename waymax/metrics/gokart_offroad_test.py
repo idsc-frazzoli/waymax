@@ -29,34 +29,34 @@ class GokartDistanceToBoundsMetricTest(tf.test.TestCase, parameterized.TestCase)
     def test(self):
         state = create_init_state(num_timesteps=5, track_config=TrackConfig(TrackType.WINTI_TEST_AIDED_3, False))
         
-        metric = GokartDistanceToBoundsMetric(safety_margin=0.0, additional_offroad_reward=4.5)
+        metric = GokartDistanceToBoundsMetric()
         result = metric.compute(state)
         self.assertEqual(result.value, 0.0)
         
-        metric = GokartDistanceToBoundsMetric(safety_margin=1.0, additional_offroad_reward=4.5)
+        metric = GokartDistanceToBoundsMetric(offroad_value=-1)
         result = metric.compute(state)
         self.assertEqual(result.value, 0.0)
         
         state.sim_trajectory.y += -1.25
-        metric = GokartDistanceToBoundsMetric(safety_margin=0.75, additional_offroad_reward=4.5)
+        metric = GokartDistanceToBoundsMetric(offroad_value=-.5)
         result = metric.compute(state)
         self.assertAllClose(result.value, 0.008163)
         
         state.sim_trajectory.y += -0.5
-        metric = GokartDistanceToBoundsMetric(safety_margin=0.75, additional_offroad_reward=4.5)
+        metric = GokartDistanceToBoundsMetric(offroad_value=-.5)
         result = metric.compute(state)
         self.assertAllClose(result.value, 0.504138)
         
-        metric = GokartDistanceToBoundsMetric(safety_margin=0.75, additional_offroad_reward=0)
+        metric = GokartDistanceToBoundsMetric(offroad_value=-1)
         result = metric.compute(state)
         self.assertAllClose(result.value, 0.504138)
         
         state.sim_trajectory.y += -5.0
-        metric = GokartDistanceToBoundsMetric(safety_margin=0.75, additional_offroad_reward=4.5)
+        metric = GokartDistanceToBoundsMetric(offroad_value=-.5)
         result = metric.compute(state)
         self.assertAllClose(result.value, 5.25)
         
-        metric = GokartDistanceToBoundsMetric(safety_margin=0.75, additional_offroad_reward=0)
+        metric = GokartDistanceToBoundsMetric(offroad_value=-1)
         result = metric.compute(state)
         self.assertAllClose(result.value, 0.75)
         
