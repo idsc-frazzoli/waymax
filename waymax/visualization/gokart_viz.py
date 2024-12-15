@@ -20,7 +20,6 @@ from typing import Any, Iterable, List, Optional
 import jax
 import matplotlib
 
-matplotlib.use("gtk3agg")
 from matplotlib.animation import FuncAnimation
 import numpy as np
 
