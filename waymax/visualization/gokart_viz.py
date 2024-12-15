@@ -149,7 +149,7 @@ class VideoPlotter:
 
         if batch_idx > -1:
             if len(state.shape) != 1:
-                raise ValueError("Expecting one batch dimension, got %s" % len(state.shape))
+                raise ValueError(f"Expecting one batch dimension, got {len(state.shape)}")
             state = viz._index_pytree(state, batch_idx)
 
         if self.video_path is not None:
