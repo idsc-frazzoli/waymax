@@ -103,12 +103,6 @@ class LinearCombinationRewardTest(tf.test.TestCase):
         ValueError, linear_combination_reward.LinearCombinationReward, config
     )
 
-class LinearTransformedRewardTest(tf.test.TestCase):
-  def test_config(self):
-    config = _config.LinearTransformedRewardConfig(
-            rewards={'gokart_offroad': 1.0}, transform={'gokart_offroad': lambda x: x^2} )
-    print(config)
-
 
 if __name__ == '__main__':
   tf.test.main()

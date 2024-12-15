@@ -29,6 +29,7 @@ from waymax.agents import actor_core
 from waymax.env import abstract_environment
 from waymax.env import base_environment as _env
 from waymax.env import typedefs as types
+from waymax.rewards.reward_factory import get_reward_function_from_config
 from waymax.utils import geometry
 
 
@@ -203,7 +204,7 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
         """
         self._planning_agent_dynamics = PlanningAgentDynamics(dynamics_model)
         self._state_dynamics = _dynamics.StateDynamics()
-        self._reward_function = rewards.LinearCombinationReward(config.rewards)
+        self._reward_function = get_reward_function_from_config(config.rewards)
         self.config = config
         if config.controlled_object != _config.ObjectType.SDC:
             raise ValueError(
