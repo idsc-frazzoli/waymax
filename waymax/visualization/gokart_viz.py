@@ -231,7 +231,7 @@ class VideoPlotter:
         """
 
         if state.shape:
-            raise ValueError("Expecting 0 batch dimension, got %s" % len(state.shape))
+            raise ValueError(f"Expecting 0 batch dimension, got {len(state.shape)}")
 
         # 1. Plots trajectory.
         traj = state.log_trajectory if use_log_traj else state.sim_trajectory
