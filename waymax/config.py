@@ -141,7 +141,7 @@ class LinearCombinationRewardConfig:
   rewards: dict[str, float]
 
   @classmethod
-  def default_gokart(cls):
+  def default_gokart(cls) -> 'LinearCombinationRewardConfig':
     return cls(
         rewards={"gokart_offroad":-4.0, "gokart_progress": 1.0},
     )
