@@ -20,3 +20,4 @@ from waymax.visualization.viz import plot_simulator_state
 from waymax.visualization.viz import plot_single_agent_brax_timestep
 from waymax.visualization.viz import plot_traffic_light_signals_as_points
 from waymax.visualization.viz import plot_trajectory
+from waymax.visualization.gokart_viz import create_video_simulator_state
