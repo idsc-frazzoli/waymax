@@ -12,7 +12,7 @@ class LinearTransformedReward(LinearCombinationReward):
 
   def __init__(self, config: LinearTransformedRewardConfig):
     super().__init__(LinearCombinationRewardConfig(config.rewards))
-    assert all([r in config.rewards  for r in config.transform])
+    assert all(r in config.rewards  for r in config.transform)
     self._transform = config.transform
 
   def compute(
