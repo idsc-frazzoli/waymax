@@ -26,7 +26,6 @@ class LinearCombinationReward(abstract_reward_function.AbstractRewardFunction):
 
   def __init__(self, config: _config.LinearCombinationRewardConfig):
     _validate_reward_metrics(config)
-
     self._config = config
     self._metrics_config = _linear_config_to_metric_config(self._config)
 
@@ -35,7 +34,6 @@ class LinearCombinationReward(abstract_reward_function.AbstractRewardFunction):
       simulator_state: datatypes.SimulatorState,
       action: datatypes.Action,
       agent_mask: jax.Array,
-      # return_reward_dict: bool = False,
   ) -> jax.Array:
     """Computes the reward as a linear combination of metrics.
 
@@ -54,15 +52,10 @@ class LinearCombinationReward(abstract_reward_function.AbstractRewardFunction):
     all_metrics = metrics.run_metrics(simulator_state, self._metrics_config)
 
     reward = jnp.zeros_like(agent_mask)
-    # reward_dict = {}
     for reward_metric_name, reward_weight in self._config.rewards.items():
       metric_all_agents = all_metrics[reward_metric_name].masked_value()
       metric = metric_all_agents * agent_mask
-      # reward_dict[reward_metric_name] = metric * reward_weight
       reward += metric * reward_weight
-    # if return_reward_dict:
-    #   return reward, reward_dict
-    # else:
     return reward
 
 

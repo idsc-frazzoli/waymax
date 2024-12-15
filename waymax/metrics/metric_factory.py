@@ -14,37 +14,10 @@
 
 """Utility function that runs all metrics according to an environment config."""
 from collections.abc import Iterable
-from typing import Any, Dict
 
-from waymax import config as _config
-from waymax import datatypes
-from waymax.metrics import abstract_metric
-from waymax.metrics import comfort
-from waymax.metrics import imitation
-from waymax.metrics import overlap
-from waymax.metrics import roadgraph
-from waymax.metrics import route
-from waymax.metrics import gokart_progress
-from waymax.metrics import gokart_offroad
-from waymax.metrics import gokart_orientation
-from waymax.metrics import gokart_action
-from waymax.metrics import gokart_state
-
-
-_METRICS_DEFAULT_ARGS: dict[str, dict[str, Any]] = {
-    "gokart_offroad": {"safety_margin": 0.0},
-    "gokart_distance_to_bounds": {"offroad_value": -1},
-    "gokart_vel_x": {"state_names": "vel_x"},
-    "gokart_vel_y": {"state_names": "vel_y"},
-    "gokart_vel_xy": {"state_names": ["vel_x", "vel_y"]},
-    "gokart_yaw_rate": {"state_names": "yaw_rate"},
-    "gokart_vel_x_out_range": {"state_names": "vel_x", "min_value": -2.0, "max_value": 6.0},
-    "gokart_vel_y_out_range": {"state_names": "vel_y", "min_value": -1.5, "max_value": 1.5},
-    "gokart_steer_action": {"action_names": "steering_angle"},
-    "gokart_throttle_action": {"action_names": ["acc_left", "acc_right"]},
-    "gokart_steer_action_rate": {"action_names": "steering_angle"},
-    "gokart_throttle_action_rate": {"action_names": ["acc_left", "acc_right"]},
-}
+from waymax import config as _config, datatypes
+from waymax.metrics import abstract_metric, comfort, imitation, overlap, roadgraph, route, gokart_progress, \
+    gokart_offroad, gokart_orientation, gokart_action, gokart_state
 
 _METRICS_REGISTRY: dict[str, abstract_metric.AbstractMetric] = {
     "log_divergence": imitation.LogDivergenceMetric(),
@@ -56,22 +29,18 @@ _METRICS_REGISTRY: dict[str, abstract_metric.AbstractMetric] = {
     "sdc_off_route": route.OffRouteMetric(),
     "gokart_progress": gokart_progress.GokartProgressMetric(),
     "gokart_orientation": gokart_orientation.GokartOrientationMetric(),
-    "gokart_offroad": gokart_offroad.GokartOffroadMetric(**_METRICS_DEFAULT_ARGS["gokart_offroad"]),
-    "gokart_distance_to_bounds": gokart_offroad.GokartDistanceToBoundsMetric(**_METRICS_DEFAULT_ARGS["gokart_distance_to_bounds"]),
-    "gokart_vel_x": gokart_state.GokartStateNormMetric(**_METRICS_DEFAULT_ARGS["gokart_vel_x"]),
-    "gokart_vel_y": gokart_state.GokartStateNormMetric(**_METRICS_DEFAULT_ARGS["gokart_vel_y"]),
-    "gokart_vel_xy": gokart_state.GokartStateNormMetric(**_METRICS_DEFAULT_ARGS["gokart_vel_xy"]),
-    "gokart_yaw_rate": gokart_state.GokartStateNormMetric(**_METRICS_DEFAULT_ARGS["gokart_yaw_rate"]),
-    "gokart_vel_x_out_range": gokart_state.GokartStateOutRangeMetric(**_METRICS_DEFAULT_ARGS["gokart_vel_x_out_range"]),
-    "gokart_vel_y_out_range": gokart_state.GokartStateOutRangeMetric(**_METRICS_DEFAULT_ARGS["gokart_vel_y_out_range"]),
-    "gokart_action": gokart_action.GokartActionNormMetric(),
-    "gokart_steer_action": gokart_action.GokartActionNormMetric(**_METRICS_DEFAULT_ARGS["gokart_steer_action"]),
-    "gokart_throttle_action": gokart_action.GokartActionNormMetric(**_METRICS_DEFAULT_ARGS["gokart_throttle_action"]),
+    "gokart_offroad": gokart_offroad.GokartOffroadMetric(),
+    "gokart_offroad_1.5": gokart_offroad.GokartOffroadMetric(safety_margin=1.5),
+    "gokart_distance_to_bounds": gokart_offroad.GokartDistanceToBoundsMetric(offroad_value=-5),
+    "gokart_velocity_norm": gokart_state.GokartStateNormMetric(["vel_x", "vel_y"]),
+    "gokart_vel_x_minus1_plus5": gokart_state.GokartStateOutRangeMetric("vel_x", min_value=-1, max_value=5.0),
+    "gokart_steer_action": gokart_action.GokartActionNormMetric("steering_angle"),
+    "gokart_throttle_action": gokart_action.GokartActionNormMetric(["acc_left", "acc_right"]),
     "gokart_tv_action": gokart_action.GokartTVActionNormMetric(),
     "gokart_action_rate": gokart_action.GokartActionRateNormMetric(),
-    "gokart_steer_action_rate": gokart_action.GokartActionRateNormMetric(**_METRICS_DEFAULT_ARGS["gokart_steer_action_rate"]),
-    "gokart_throttle_action_rate": gokart_action.GokartActionRateNormMetric(**_METRICS_DEFAULT_ARGS["gokart_throttle_action_rate"]),
-}    
+    "gokart_steer_action_rate": gokart_action.GokartActionRateNormMetric("steering_angle"),
+    "gokart_throttle_action_rate": gokart_action.GokartActionRateNormMetric(["acc_left", "acc_right"]),
+}
 
 def run_metrics(
     simulator_state: datatypes.SimulatorState,
@@ -124,16 +93,4 @@ def get_metric(metric_name: str) -> abstract_metric.AbstractMetric:
     if metric_name not in _METRICS_REGISTRY:
         raise ValueError(f"Metric {metric_name} not registered.")
     return _METRICS_REGISTRY[metric_name]
-
-
-def update_metrics_registry(reward_args: Dict[str, Dict[str, Any]]):
-    for metric_name, metric_args in reward_args.items():
-        metric_class = get_metric(metric_name).__class__
-        metric_default_args = _METRICS_DEFAULT_ARGS.get(metric_name, None)
-        if metric_default_args is not None:
-            metric_default_args.update(metric_args)
-            metric_new_args = metric_default_args
-        else:
-            metric_new_args = metric_args
-        register_metric(metric_name, metric_class(**metric_new_args), exist_ok=True)
 

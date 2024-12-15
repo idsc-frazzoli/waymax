@@ -20,7 +20,6 @@ from waymax.metrics.imitation import LogDivergenceMetric
 from waymax.metrics.metric_factory import get_metric_names
 from waymax.metrics.metric_factory import register_metric
 from waymax.metrics.metric_factory import run_metrics
-from waymax.metrics.metric_factory import update_metrics_registry
 from waymax.metrics.overlap import OverlapMetric
 from waymax.metrics.roadgraph import OffroadMetric
 from waymax.metrics.roadgraph import WrongWayMetric

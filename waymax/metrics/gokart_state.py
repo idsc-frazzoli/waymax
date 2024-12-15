@@ -21,7 +21,7 @@ class GokartStateNormMetric(abstract_metric.AbstractMetric):
         """
         assert isinstance(state_names, (Sequence, str))
         if isinstance(state_names, str):
-            state_names = [state_names]
+            state_names = [state_names, ]
         assert all(isinstance(state_name, str) for state_name in state_names)
         assert isinstance(ord, int)
         self._state_names: Sequence[str] = state_names

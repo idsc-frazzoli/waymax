@@ -15,7 +15,9 @@
 """Configs for Waymax Environments."""
 import dataclasses
 import enum
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Callable
+
+import jax
 
 
 class CoordinateFrame(enum.Enum):
@@ -136,8 +138,24 @@ class LinearCombinationRewardConfig:
     rewards: Dictionary of metric names to floats indicating the weight of each
       metric to create a reward of a linear combination.
   """
-
   rewards: dict[str, float]
+
+  @classmethod
+  def default_gokart(cls):
+    return cls(
+        rewards={"gokart_offroad":-4.0, "gokart_progress": 1.0},
+    )
+
+@dataclasses.dataclass(frozen=True)
+class LinearTransformedRewardConfig(LinearCombinationRewardConfig):
+  """Config listing all metrics and their corresponding transform.
+
+  Attributes:
+    rewards: Dictionary of metric names to floats indicating the weight of each
+      metric to create a reward of a linear combination.
+    transform: Dictionary of metric names to functions that apply an additional transform to the metric
+  """
+  transform: dict[str, Callable[[jax.Array], jax.Array]]
 
 
 class ObjectType(enum.Enum):

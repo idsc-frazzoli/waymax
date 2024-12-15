@@ -18,8 +18,7 @@ import jax.numpy as jnp
 import numpy as np
 import tensorflow as tf
 
-from waymax import config as _config
-from waymax import datatypes
+from waymax import config as _config, datatypes
 from waymax.rewards import linear_combination_reward
 from waymax.utils import test_utils
 
@@ -103,6 +102,12 @@ class LinearCombinationRewardTest(tf.test.TestCase):
     self.assertRaises(
         ValueError, linear_combination_reward.LinearCombinationReward, config
     )
+
+class LinearTransformedRewardTest(tf.test.TestCase):
+  def test_config(self):
+    config = _config.LinearTransformedRewardConfig(
+            rewards={'gokart_offroad': 1.0}, transform={'gokart_offroad': lambda x: x^2} )
+    print(config)
 
 
 if __name__ == '__main__':
