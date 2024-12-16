@@ -18,8 +18,7 @@ import jax.numpy as jnp
 import numpy as np
 import tensorflow as tf
 
-from waymax import config as _config
-from waymax import datatypes
+from waymax import config as _config, datatypes
 from waymax.rewards import linear_combination_reward
 from waymax.utils import test_utils
 

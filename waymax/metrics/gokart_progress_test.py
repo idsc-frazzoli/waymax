@@ -1,17 +1,16 @@
 import dataclasses
-from pprint import pprint
 
-from jax import numpy as jnp
 import tensorflow as tf
-
 from absl.testing import parameterized
+from jax import numpy as jnp
 
-from gocarx.metrics.gokart_progress import GokartProgressMetric
-from waymax import config as _config, datatypes
+from gocarx.dynamics.gokart_config import GoKartGeometry, PajieckaParams, TricycleParams
 from gocarx.dynamics.tricycle_model import TricycleModel
 from gocarx.env import GokartRacingEnvironment
-from gocarx.dynamics.gokart_config import GoKartGeometry, PajieckaParams, TricycleParams
 from gocarx.utils.gokart_utils import create_init_state
+from waymax import config as _config, datatypes
+from waymax.metrics import GokartProgressMetric
+
 
 class GokartProgressMetricTest(tf.test.TestCase, parameterized.TestCase):
     def test_progress_without_stepping(self):

@@ -2,9 +2,9 @@ import tensorflow as tf
 from absl.testing import parameterized
 from jax import numpy as jnp
 
-from waymax.metrics import GokartOrientationMetric
 from gocarx.utils.gokart_utils import create_init_state
 from waymax import datatypes
+from waymax.metrics import GokartOrientationMetric
 
 
 class GokartOrientationMetricTest(tf.test.TestCase, parameterized.TestCase):
