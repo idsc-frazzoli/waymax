@@ -409,16 +409,11 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
             timestep=state.timestep,
             allow_object_injection=self.config.allow_new_objects_after_warmup,
         )
-        new_timestep = state.timestep + 1
-        new_history_actions = jax.lax.cond(state.remaining_timesteps > 0,
-                    state.history_actions.set_actions,
-                    lambda act, ts: state.history_actions,
-                    action, new_timestep)
 
+        new_timestep = state.timestep + 1
         return state.replace(
             sim_trajectory=new_traj,
             timestep=new_timestep,
-            history_actions=new_history_actions,
             sim_agent_actor_states=updated_sim_agent_actor_states,
         )
 
