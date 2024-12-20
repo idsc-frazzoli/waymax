@@ -131,9 +131,9 @@ class SimulatorState(Generic[TrajectoryType]):
 
 @chex.dataclass
 class GoKartSimState(SimulatorState[object_state.GokartTrajectory]):
-    #todo description of the use of sdc paths and so on
-    # sim_trajectory: object_state.GokartTrajectory
-    # log_trajectory: object_state.GokartTrajectory
+    """
+    A dataclass holding the simulator state for the gokart environment.
+    """
     history_actions: Optional[action.GokartAction] = None
     sdc_paths: Optional[route.GoKartPaths] = None
     

@@ -2,21 +2,21 @@ import tensorflow as tf
 from absl.testing import parameterized
 
 from gocarx.env.track_config import TrackConfig, TrackType
-from gocarx.utils.gokart_utils import create_init_state
+from gocarx.utils.gokart_utils import init_gokart_sim_state
 from waymax.metrics import GokartOffroadMetric, GokartDistanceToBoundsMetric
 
 
 class GokartOffroadMetricTest(tf.test.TestCase, parameterized.TestCase):
     def test_onroad(self):
         metric = GokartOffroadMetric()
-        state = create_init_state(num_timesteps=100)
+        state = init_gokart_sim_state(num_timesteps=100)
         result = metric.compute(state)
         # should be zero, because the car is not offroad
         self.assertEqual(result.value, 0.0)
 
     def test_offroad(self):
         metric = GokartOffroadMetric()
-        state = create_init_state(num_timesteps=100)
+        state = init_gokart_sim_state(num_timesteps=100)
         current_y = state.current_sim_trajectory.x[..., 0, 0]
         # move the car offroad
         current_y -= 2
@@ -27,7 +27,7 @@ class GokartOffroadMetricTest(tf.test.TestCase, parameterized.TestCase):
         
 class GokartDistanceToBoundsMetricTest(tf.test.TestCase, parameterized.TestCase):
     def test(self):
-        state = create_init_state(num_timesteps=5, track_config=TrackConfig(TrackType.WINTI_TEST_AIDED_3, False))
+        state = init_gokart_sim_state(num_timesteps=5, track_config=TrackConfig(TrackType.WINTI_TEST_AIDED_3, False))
         
         metric = GokartDistanceToBoundsMetric()
         result1 = metric.compute(state)

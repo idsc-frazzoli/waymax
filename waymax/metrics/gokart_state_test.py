@@ -1,14 +1,14 @@
 import tensorflow as tf
 from absl.testing import parameterized
 
-from gocarx.utils.gokart_utils import create_init_state
+from gocarx.utils.gokart_utils import init_gokart_sim_state
 from waymax.metrics import GokartStateNormMetric, GokartStateOutRangeMetric
 
 
 class GokartStateMetricTest(tf.test.TestCase, parameterized.TestCase):
     
     def test(self):
-        state = create_init_state(num_timesteps=5)
+        state = init_gokart_sim_state(num_timesteps=5)
         state.sim_trajectory.yaw_rate = state.sim_trajectory.yaw_rate.at[:,2].set(-1.234)
         state.sim_trajectory.vel_x = state.sim_trajectory.vel_x.at[:,2].set(6.937)
         state.sim_trajectory.vel_y = state.sim_trajectory.vel_y.at[:,2].set(-2.593)
@@ -30,7 +30,7 @@ class GokartStateMetricTest(tf.test.TestCase, parameterized.TestCase):
 class GokartStateOutRangeMetricTest(tf.test.TestCase, parameterized.TestCase):
     
     def test(self):
-        state = create_init_state(num_timesteps=5)
+        state = init_gokart_sim_state(num_timesteps=5)
         state.sim_trajectory.yaw_rate = state.sim_trajectory.yaw_rate.at[:,2].set(-1.234)
         state.sim_trajectory.vel_y = state.sim_trajectory.vel_y.at[:,2].set(6.937)
         

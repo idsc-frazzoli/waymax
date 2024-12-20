@@ -2,7 +2,7 @@ import tensorflow as tf
 from absl.testing import parameterized
 from jax import numpy as jnp
 
-from gocarx.utils.gokart_utils import create_init_state
+from gocarx.utils.gokart_utils import init_gokart_sim_state
 from waymax import datatypes
 from waymax.metrics import GokartActionNormMetric, GokartActionRateNormMetric, GokartTVActionNormMetric, GokartActionOutRangeMetric
 
@@ -10,7 +10,7 @@ from waymax.metrics import GokartActionNormMetric, GokartActionRateNormMetric, G
 class GokartActionNormMetricTest(tf.test.TestCase, parameterized.TestCase):
     def test_actions(self):
         metric = GokartActionNormMetric()
-        state = create_init_state(num_timesteps=5)
+        state = init_gokart_sim_state(num_timesteps=5)
         
         state.history_actions = state.history_actions.set_actions(
             datatypes.Action(data=jnp.array([0.0, 0.0, 0.0]), valid=jnp.ones((1, 3))), 0
@@ -36,7 +36,7 @@ class GokartActionNormMetricTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_steering(self):
         metric = GokartActionNormMetric(["steering_angle"])
-        state = create_init_state(num_timesteps=5)
+        state = init_gokart_sim_state(num_timesteps=5)
         
         state.history_actions = state.history_actions.set_actions(
             datatypes.Action(data=jnp.array([0.0, 0.676, -0.232]), valid=jnp.ones((1, 3))), 0
@@ -68,7 +68,7 @@ class GokartActionNormMetricTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_throttle(self):
         metric = GokartActionNormMetric(["acc_left", "acc_right"])
-        state = create_init_state(num_timesteps=5)
+        state = init_gokart_sim_state(num_timesteps=5)
         
         state.history_actions = state.history_actions.set_actions(
             datatypes.Action(data=jnp.array([-0.9654, 0.0, 0.0]), valid=jnp.ones((1, 3))), 0
@@ -103,7 +103,7 @@ class GokartActionRateNormMetricTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_action_rates(self):
         metric = GokartActionRateNormMetric()
-        state = create_init_state(num_timesteps=5)
+        state = init_gokart_sim_state(num_timesteps=5)
         
         state.history_actions = state.history_actions.set_actions(
             datatypes.Action(data=jnp.array([0.1, 0.2, 0.3]), valid=jnp.ones((1, 3))), 0
@@ -143,7 +143,7 @@ class GokartActionRateNormMetricTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_steering_rate(self):
         metric = GokartActionRateNormMetric(["steering_angle"])
-        state = create_init_state(num_timesteps=5)
+        state = init_gokart_sim_state(num_timesteps=5)
         
         state.history_actions = state.history_actions.set_actions(
             datatypes.Action(data=jnp.array([0.1, 0.2, 0.3]), valid=jnp.ones((1, 3))), 0
@@ -179,7 +179,7 @@ class GokartActionRateNormMetricTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_throttle_rate(self):
         metric = GokartActionRateNormMetric(["acc_left", "acc_right"])
-        state = create_init_state(num_timesteps=5)
+        state = init_gokart_sim_state(num_timesteps=5)
         
         state.history_actions = state.history_actions.set_actions(
             datatypes.Action(data=jnp.array([0.1, 0.2, 0.3]), valid=jnp.ones((1, 3))), 0
@@ -219,7 +219,7 @@ class GokartTVActionNormMetricTest(tf.test.TestCase, parameterized.TestCase):
     def test_tv_action(self):
 
         metric = GokartTVActionNormMetric()
-        state = create_init_state(num_timesteps=5)
+        state = init_gokart_sim_state(num_timesteps=5)
         
         state.history_actions = state.history_actions.set_actions(
             datatypes.Action(data=jnp.array([-0.9654, 0.0, 0.0]), valid=jnp.ones((1, 3))), 0
@@ -249,7 +249,7 @@ class GokartTVActionNormMetricTest(tf.test.TestCase, parameterized.TestCase):
 class GokartActionOutRangeMetricTest(tf.test.TestCase, parameterized.TestCase):
     
     def test(self):
-        state = create_init_state(num_timesteps=5)
+        state = init_gokart_sim_state(num_timesteps=5)
         state.history_actions = state.history_actions.set_actions(
             datatypes.Action(data=jnp.array([-1.9654, 0.676, 1.232]), valid=jnp.ones((1, 3))), 2
         )
