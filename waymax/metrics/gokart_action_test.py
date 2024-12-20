@@ -12,13 +12,13 @@ class GokartActionNormMetricTest(tf.test.TestCase, parameterized.TestCase):
         metric = GokartActionNormMetric()
         state = init_gokart_sim_state(num_timesteps=5)
         
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([0.0, 0.0, 0.0]), valid=jnp.ones((1, 3))), 0
         )
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([0.1, 0.2, 0.3]), valid=jnp.ones((1, 3))), 1
         )
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([-0.9654, 0.676, -0.232]), valid=jnp.ones((1, 3))), 2
         )
 
@@ -38,19 +38,19 @@ class GokartActionNormMetricTest(tf.test.TestCase, parameterized.TestCase):
         metric = GokartActionNormMetric(["steering_angle"])
         state = init_gokart_sim_state(num_timesteps=5)
         
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([0.0, 0.676, -0.232]), valid=jnp.ones((1, 3))), 0
         )
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([0.1, 0.2, 0.3]), valid=jnp.ones((1, 3))), 1
         )
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([-0.9654, 0.676, -0.232]), valid=jnp.ones((1, 3))), 2
         )
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([0.0, -0.843, 0.123]), valid=jnp.ones((1, 3))), 3
         )
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([0.382, 0.39, -0.54]), valid=jnp.ones((1, 3))), 4
         )
 
@@ -70,19 +70,19 @@ class GokartActionNormMetricTest(tf.test.TestCase, parameterized.TestCase):
         metric = GokartActionNormMetric(["acc_left", "acc_right"])
         state = init_gokart_sim_state(num_timesteps=5)
         
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([-0.9654, 0.0, 0.0]), valid=jnp.ones((1, 3))), 0
         )
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([0.1, 0.2, 0.3]), valid=jnp.ones((1, 3))), 1
         )
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([-0.9654, 0.676, -0.232]), valid=jnp.ones((1, 3))), 2
         )
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([0.54, -0.843, 0.123]), valid=jnp.ones((1, 3))), 3
         )
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([-0.28, 0.39, -0.54]), valid=jnp.ones((1, 3))), 4
         )
 
@@ -105,19 +105,19 @@ class GokartActionRateNormMetricTest(tf.test.TestCase, parameterized.TestCase):
         metric = GokartActionRateNormMetric()
         state = init_gokart_sim_state(num_timesteps=5)
         
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([0.1, 0.2, 0.3]), valid=jnp.ones((1, 3))), 0
         )
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([0.4, -0.6, 0.7]), valid=jnp.ones((1, 3))), 1
         )
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([-0.654, 0.038, -0.283]), valid=jnp.ones((1, 3))), 2
         )
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([-0.103, 0.812, -0.539]), valid=jnp.ones((1, 3))), 3
         )
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([-0.629, 0.123, -0.654]), valid=jnp.ones((1, 3))), 4
         )
         
@@ -145,19 +145,19 @@ class GokartActionRateNormMetricTest(tf.test.TestCase, parameterized.TestCase):
         metric = GokartActionRateNormMetric(["steering_angle"])
         state = init_gokart_sim_state(num_timesteps=5)
         
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([0.1, 0.2, 0.3]), valid=jnp.ones((1, 3))), 0
         )
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([0.4, -0.6, 0.7]), valid=jnp.ones((1, 3))), 1
         )
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([-0.654, 0.038, -0.283]), valid=jnp.ones((1, 3))), 2
         )
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([-0.103, 0.812, -0.539]), valid=jnp.ones((1, 3))), 3
         )
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([-0.812, 0.123, -0.654]), valid=jnp.ones((1, 3))), 4
         )
 
@@ -181,19 +181,19 @@ class GokartActionRateNormMetricTest(tf.test.TestCase, parameterized.TestCase):
         metric = GokartActionRateNormMetric(["acc_left", "acc_right"])
         state = init_gokart_sim_state(num_timesteps=5)
         
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([0.1, 0.2, 0.3]), valid=jnp.ones((1, 3))), 0
         )
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([0.4, -0.6, 0.7]), valid=jnp.ones((1, 3))), 1
         )
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([-0.654, 0.038, -0.283]), valid=jnp.ones((1, 3))), 2
         )
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([-0.103, 0.812, -0.539]), valid=jnp.ones((1, 3))), 3
         )
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([-0.812, 0.123, -0.654]), valid=jnp.ones((1, 3))), 4
         )
 
@@ -221,16 +221,16 @@ class GokartTVActionNormMetricTest(tf.test.TestCase, parameterized.TestCase):
         metric = GokartTVActionNormMetric()
         state = init_gokart_sim_state(num_timesteps=5)
         
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([-0.9654, 0.0, 0.0]), valid=jnp.ones((1, 3))), 0
         )
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([0.1, 0.2, 0.3]), valid=jnp.ones((1, 3))), 1
         )
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([-0.9654, 0.676, -0.232]), valid=jnp.ones((1, 3))), 2
         )
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([0.54, -0.843, 0.123]), valid=jnp.ones((1, 3))), 3
         )
 
@@ -250,7 +250,7 @@ class GokartActionOutRangeMetricTest(tf.test.TestCase, parameterized.TestCase):
     
     def test(self):
         state = init_gokart_sim_state(num_timesteps=5)
-        state.history_actions = state.history_actions.set_actions(
+        state.actions_history = state.actions_history.set_actions(
             datatypes.Action(data=jnp.array([-1.9654, 0.676, 1.232]), valid=jnp.ones((1, 3))), 2
         )
         

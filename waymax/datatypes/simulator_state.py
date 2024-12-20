@@ -134,19 +134,19 @@ class GoKartSimState(SimulatorState[object_state.GokartTrajectory]):
     """
     A dataclass holding the simulator state for the gokart environment.
     """
-    history_actions: Optional[action.GokartAction] = None
+    actions_history: Optional[action.GokartAction] = None
     sdc_paths: Optional[route.GoKartPaths] = None
     
     @property
     def current_action_history(self) -> action.GokartAction:
         """Returns the actions corresponding to the current sim state."""
-        return operations.dynamic_slice(self.history_actions, self.timestep, 1, axis=-1)
+        return operations.dynamic_slice(self.actions_history, self.timestep, 1, axis=-1)
 
     @property
     def previous_action_history(self) -> action.GokartAction:
         """Returns the trajectory corresponding to the previous sim state."""
         timestep = jnp.maximum(self.timestep - 1, 0)
-        return operations.dynamic_slice(self.history_actions, timestep, 1, axis=-1)
+        return operations.dynamic_slice(self.actions_history, timestep, 1, axis=-1)
 
     def __eq__(self, other: Any) -> bool:
         return operations.compare_all_leaf_nodes(self, other)
