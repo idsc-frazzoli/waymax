@@ -49,7 +49,6 @@ class TimeStep:
     metrics: Optional dictionary of metrics.
     info: Optional dictionary of arbitrary logging information.
   """
-
   state: datatypes.SimulatorState
   observation: types.Observation
   reward: jax.Array

@@ -4,9 +4,9 @@ name: CI
 
 on:
   push:
-    branches: [ "main", "staging" ]
+    branches: [ "main", "gocarx" ]
   pull_request:
-    branches: [ "main", "staging" ]
+    branches: [ "main", "gocarx" ]
 
 permissions:
   contents: read
