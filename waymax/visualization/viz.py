@@ -120,7 +120,7 @@ def plot_trajectory(
   Plots the full bounding_boxes only for time_idx step, overlap is
   highlighted.
 
-  Notation: A: number of agents; T: numbe of time steps; 5 degree of freedom:
+  Notation: A: number of agents; T: number of time steps; 5 degree of freedom:
   center x, center y, length, width, yaw.
 
   Args:
