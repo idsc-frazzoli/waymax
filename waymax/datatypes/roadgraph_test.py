@@ -48,7 +48,7 @@ class RoadgraphTest(tf.test.TestCase, parameterized.TestCase):
     )
     self.rg.validate()
 
-  @pytest.skip("To be fixed")
+  @pytest.mark.skip("To be fixed")
   def test_top_k_roadgraph_returns_correct_output_fewer_points(self):
     xyz_and_direction = jnp.array(
         [
