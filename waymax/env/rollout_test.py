@@ -138,7 +138,7 @@ class UtilsTest(tf.test.TestCase, parameterized.TestCase):
           lambda x: x[None], jax.tree_util.tree_map(jnp.asarray, next_state)
       )
       all_states = jax.tree_util.tree_map(
-          lambda x, y: jnp.concatenate((x, y)), manual_rollout.sim_state, last_state
+          lambda x, y: jnp.concatenate((x, y)), manual_rollout.state, last_state
       )
       last_observation = jax.tree_util.tree_map(
           lambda x: x[None], env.observe(next_state)

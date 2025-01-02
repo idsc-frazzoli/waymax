@@ -20,7 +20,7 @@ The validate function is implemented separately instead of as __post_init__, to
 have better support with jax utils.
 """
 
-from typing import Any, Optional, Sequence, TypeVar, Generic
+from typing import Any, Optional, Generic
 
 import chex
 import jax
@@ -29,7 +29,6 @@ import jax.numpy as jnp
 from waymax import config
 from waymax.datatypes import array, action, object_state, operations, roadgraph, route, traffic_lights
 from waymax.datatypes.object_state import TrajectoryType
-
 
 ArrayLike = jax.typing.ArrayLike
 PyTree = array.PyTree
@@ -86,14 +85,14 @@ class SimulatorState(Generic[TrajectoryType]):
     def is_done(self) -> bool:
         """Returns whether the simulation is at the end of the logged history."""
         return jnp.array(  # pytype: disable=bad-return-type  # jnp-type
-            (self.timestep + 1) >= self.log_trajectory.num_timesteps, bool
+                (self.timestep + 1) >= self.log_trajectory.num_timesteps, bool
         )
 
     @property
     def remaining_timesteps(self) -> int:
         """Returns the number of remaining timesteps in the episode."""
         return jnp.array(
-            self.log_trajectory.num_timesteps - self.timestep - 1, int
+                self.log_trajectory.num_timesteps - self.timestep - 1, int
         )  # pytype: disable=bad-return-type  # jnp-type
 
     @property
@@ -111,7 +110,7 @@ class SimulatorState(Generic[TrajectoryType]):
     def current_log_trajectory(self) -> TrajectoryType:
         """Returns the trajectory corresponding to the current sim state."""
         return operations.dynamic_slice(self.log_trajectory, self.timestep, 1, axis=-1)
-    
+
     def __eq__(self, other: Any) -> bool:
         return operations.compare_all_leaf_nodes(self, other)
 
@@ -136,7 +135,7 @@ class GoKartSimState(SimulatorState[object_state.GokartTrajectory]):
     """
     actions_history: Optional[action.GokartAction] = None
     sdc_paths: Optional[route.GoKartPaths] = None
-    
+
     @property
     def current_action_history(self) -> action.GokartAction:
         """Returns the actions corresponding to the current sim state."""
@@ -152,18 +151,18 @@ class GoKartSimState(SimulatorState[object_state.GokartTrajectory]):
         return operations.compare_all_leaf_nodes(self, other)
 
 
-def update_state_by_log(state: SimulatorState, num_steps: int) -> SimulatorState:
+def update_state_by_log(state: SimulatorState | GoKartSimState, num_steps: int) -> SimulatorState | GoKartSimState:
     """Advances SimulatorState by num_steps using logged data."""
     # TODO jax runtime check num_steps > state.remaining_timesteps
     return state.replace(
-        timestep=state.timestep + num_steps,
-        sim_trajectory=operations.update_by_slice_in_dim(
-            inputs=state.sim_trajectory,
-            updates=state.log_trajectory,
-            inputs_start_idx=state.timestep + 1,
-            slice_size=num_steps,
-            axis=-1,
-        ),
+            timestep=state.timestep + num_steps,
+            sim_trajectory=operations.update_by_slice_in_dim(
+                    inputs=state.sim_trajectory,
+                    updates=state.log_trajectory,
+                    inputs_start_idx=state.timestep + 1,
+                    slice_size=num_steps,
+                    axis=-1,
+            ),
     )
 
 
