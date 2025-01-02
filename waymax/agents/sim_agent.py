@@ -111,12 +111,11 @@ class FrozenSimPolicy(SimAgentActor):
       self, state: datatypes.SimulatorState
   ) -> datatypes.TrajectoryUpdate:
     """Returns the current sim trajectory as the next update."""
-    return datatypes.GoKartTrajectoryUpdate(
+    return datatypes.TrajectoryUpdate(
         x=state.current_sim_trajectory.x,
         y=state.current_sim_trajectory.y,
         yaw=state.current_sim_trajectory.yaw,
         vel_x=state.current_sim_trajectory.vel_x,
         vel_y=state.current_sim_trajectory.vel_y,
-        yaw_rate=state.current_sim_trajectory.yaw_rate,
         valid=state.current_sim_trajectory.valid,
     )

@@ -210,8 +210,9 @@ class Trajectory:
         # Make sure those that were originally invalid are still invalid.
         return jnp.where(self.valid, vel_yaw, _INVALID_FLOAT_VALUE)
 
+    @classmethod
     @property
-    def controllable_fields(self) -> Sequence[str]:
+    def controllable_fields(cls) -> list[str]:
         """Returns the fields that are controllable."""
         return ["x", "y", "yaw", "vel_x", "vel_y"]
 
@@ -305,8 +306,9 @@ class GokartTrajectory(Trajectory):
     acc_x: jax.Array
     acc_y: jax.Array
 
+    @classmethod
     @property
-    def controllable_fields(self) -> Sequence[str]:
+    def controllable_fields(cls) -> Sequence[str]:
         """Returns the fields that are controllable."""
         return ["x", "y", "yaw", "vel_x", "vel_y", "yaw_rate", "acc_x", "acc_y"]
 
