@@ -1,14 +1,11 @@
-import tensorflow as tf
-import jax
-import jax.numpy as jnp
 from collections import defaultdict
 
-from waymax import datatypes, metrics, config as _config
+import jax.numpy as jnp
+import tensorflow as tf
+
+from waymax import config as _config
 from waymax.rewards.linear_transformed_reward import LinearTransformedReward
 from waymax.utils import test_utils
-
-
-
 
 
 # # Mock metric function to simulate `metrics.run_metrics`
@@ -32,8 +29,8 @@ from waymax.utils import test_utils
 class LinearTransformedRewardTest(tf.test.TestCase):
     def test_config(self):
         config = _config.LinearTransformedRewardConfig(
-                rewards={'gokart_offroad': 1.0},
-                transform={'gokart_offroad': lambda x: x ** 2}
+                rewards={'offroad': 1.0},
+                transform={'offroad': lambda x: x ** 2}
         )
         reward = LinearTransformedReward(config)
 
@@ -81,7 +78,7 @@ class LinearTransformedRewardTest(tf.test.TestCase):
 
     def test_default_factory(self):
         reward_config = _config.LinearTransformedRewardConfig(
-                rewards={"gokart_offroad": 0.9},
+                rewards={"offroad": 0.9},
                 transform=defaultdict(
                         lambda: lambda x: x,  # Default to identity
                 ),
