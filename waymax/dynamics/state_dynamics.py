@@ -13,11 +13,12 @@
 # limitations under the License.
 
 """Dynamics model for setting state in global coordinates."""
-from dm_env import specs
 import jax
 import numpy as np
+from dm_env import specs
 
 from waymax import datatypes
+from waymax.datatypes import Trajectory, GokartTrajectory
 from waymax.dynamics import abstract_dynamics
 
 
@@ -30,7 +31,7 @@ class StateDynamics(abstract_dynamics.DynamicsModel):
   def action_spec(self) -> specs.BoundedArray:
     """Action spec for the delta global action space."""
     return specs.BoundedArray(
-        shape=(len(abstract_dynamics.CONTROLLABLE_FIELDS),),
+        shape=(len(Trajectory.controllable_fields),),
         dtype=np.float32,
         minimum=-float('inf'),
         maximum=float('inf'),
@@ -99,11 +100,20 @@ class GoKartStateDynamics(StateDynamics):
     """Initializes the StateDynamics."""
     super().__init__()
 
+  def action_spec(self) -> specs.BoundedArray:
+    """Action spec for the delta global action space."""
+    return specs.BoundedArray(
+        shape=(len(GokartTrajectory.controllable_fields),),
+        dtype=np.float32,
+        minimum=-float('inf'),
+        maximum=float('inf'),
+    )
+
   def compute_update(
       self,
       action: datatypes.Action,
-      trajectory: datatypes.Trajectory,
-  ) -> datatypes.TrajectoryUpdate:
+      trajectory: datatypes.GokartTrajectory,
+  ) -> datatypes.GoKartTrajectoryUpdate:
     """Computes the pose and velocity updates at timestep.
 
     This dynamics will directly set the next x, y, yaw, vel_x, and vel_y based
@@ -129,4 +139,3 @@ class GoKartStateDynamics(StateDynamics):
         acc_y=action.data[..., 7:8],
         valid=action.valid,
     )
-  

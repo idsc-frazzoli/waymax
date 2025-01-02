@@ -190,10 +190,10 @@ def rollout(
   )
   last_output = RolloutOutput(
       action=padding_action,
-      state=carry.sim_state,
+      state=carry.state,
       observation=carry.observation,
-      metrics=env.metrics(carry.sim_state),
-      reward=env.reward(carry.sim_state, padding_action),
+      metrics=env.metrics(carry.state),
+      reward=env.reward(carry.state, padding_action),
   )
 
   output = jax.tree_util.tree_map(
