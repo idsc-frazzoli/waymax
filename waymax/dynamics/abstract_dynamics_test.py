@@ -28,7 +28,7 @@ from waymax.utils import test_utils
 TEST_DATA_PATH = test_utils.ROUTE_DATA_PATH
 
 
-class TestDynamics(abstract_dynamics.DynamicsModel):
+class MockDynamics(abstract_dynamics.DynamicsModel):
   """Ignores actions and returns a hard-coded trajectory update at each step."""
 
   def __init__(self, update: datatypes.TrajectoryUpdate):
@@ -84,7 +84,7 @@ class AbstractDynamicsTest(tf.test.TestCase, parameterized.TestCase):
     )
 
     # Use TestDynamics, which simply sets the state to the value of the action.
-    dynamics_model = TestDynamics(update)
+    dynamics_model = MockDynamics(update)
     timestep = 2
     next_traj = dynamics_model.forward(  # pytype: disable=wrong-arg-types  # jnp-type
         action=jnp.zeros((batch_size, objects)),
@@ -136,7 +136,7 @@ class AbstractDynamicsTest(tf.test.TestCase, parameterized.TestCase):
     )
     trajectory_update.validate()
     is_controlled = sim_state.object_metadata.is_sdc
-    test_dynamics = TestDynamics(trajectory_update)
+    test_dynamics = MockDynamics(trajectory_update)
     updated_sim_traj = test_dynamics.forward(  # pytype: disable=wrong-arg-types  # jnp-type
         jnp.zeros_like(is_controlled),
         trajectory=sim_state.sim_trajectory,
@@ -258,7 +258,7 @@ class AbstractDynamicsTest(tf.test.TestCase, parameterized.TestCase):
         yaw=jnp.ones_like(current_traj.yaw),
         valid=action_valid[..., jnp.newaxis],
     )
-    test_dynamics = TestDynamics(trajectory_update)
+    test_dynamics = MockDynamics(trajectory_update)
     updated_sim_traj = test_dynamics.forward(  # pytype: disable=wrong-arg-types  # jnp-type
         jnp.zeros_like(is_controlled),
         trajectory=sim_state.sim_trajectory,
