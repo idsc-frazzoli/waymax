@@ -176,9 +176,9 @@ class WaypointFollowingPolicy(sim_agent.SimAgentActor):
     invalid_traj = jax.tree_util.tree_map(
         datatypes.make_invalid_data, next_traj
     )
-    next_traj = jax.tree_util.tree_map(
-        lambda x, y: jnp.where(next_traj.valid, x, y), next_traj, invalid_traj
-    )
+    # next_traj = jax.tree_util.tree_map(
+    #     lambda x, y: jnp.where(next_traj.valid, x, y), next_traj, invalid_traj
+    # )
     return next_traj
 
   @abc.abstractmethod
