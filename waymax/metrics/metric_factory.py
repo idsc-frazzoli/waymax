@@ -26,6 +26,9 @@ from waymax.metrics import route
 from waymax.metrics import gokart_progress
 from waymax.metrics import gokart_offroad
 from waymax.metrics import gokart_orientation
+from waymax.metrics import sigmoid_imitation
+from waymax.metrics import get_target
+from waymax.metrics import mitigate_oscillation
 
 
 _METRICS_REGISTRY: dict[str, abstract_metric.AbstractMetric] = {
@@ -39,6 +42,9 @@ _METRICS_REGISTRY: dict[str, abstract_metric.AbstractMetric] = {
     'gokart_progress': gokart_progress.GokartProgressMetric(),
     'gokart_orientation': gokart_orientation.GokartOrientationMetric(),
     'gokart_offroad': gokart_offroad.GokartOffroadMetric(),
+    'sigmoid_log_divergence_2.5': sigmoid_imitation.SigmoidLogDivergenceMetric(),
+    'get_target_2.5': get_target.GetTargetMetric(),
+    'mitigate_oscillation': mitigate_oscillation.MitigateOscillationMetric(),
 }
 
 
