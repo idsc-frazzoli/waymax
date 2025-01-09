@@ -88,11 +88,12 @@ class AbstractEnvironment(abc.ABC):
     """
 
   @abc.abstractmethod
-  def observe(self, state: types.GenericState) -> types.Observation:
+  def observe(self, state: types.GenericState, rng: jax.Array | None = None,) -> types.Observation:
     """Computes the observation of the simulator for the actor.
 
     Args:
       state: The state used to compute the observation.
+      rng: Optional random number generator for noisy observations.
 
     Returns:
       An observation of the simulator state for the given timestep of shape

@@ -66,7 +66,7 @@ class MockAbstractEnvironment(abstract_environment.AbstractEnvironment):
     """Not implemented metrics function."""
     raise NotImplementedError()
 
-  def observe(self, state: datatypes.SimulatorState) -> types.Observation:
+  def observe(self, state: datatypes.SimulatorState, rng: jax.Array | None = None,) -> types.Observation:
     """Not implemented observe function."""
     raise NotImplementedError()
 

@@ -247,7 +247,7 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
         state = state.replace(sim_agent_actor_states=init_actor_states)
         return state
 
-    def observe(self, state: PlanningAgentSimulatorState) -> types.Observation:
+    def observe(self, state: PlanningAgentSimulatorState, rng: jax.Array | None = None,) -> types.Observation:
         """Computes the observation for the given simulation state.
 
         Here we assume that the default observation is just the simulator state. We
@@ -260,10 +260,12 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
 
         Args:
           state: Current state of the simulator of shape (...).
+          rng: Optional random number generator for noisy observations.
 
         Returns:
           Simulator state as an observation without modifications of shape (...).
         """
+        del rng
         return state
 
     @jax.named_scope("PlanningAgentEnvironment.metrics")
