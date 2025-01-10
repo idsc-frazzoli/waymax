@@ -52,6 +52,24 @@ class Action:
     chex.assert_equal(self.valid.shape[-1], 1)
     chex.assert_type([self.valid], [jnp.bool_])
 
+@chex.dataclass
+class SDC_actions_history(Action):
+  """A datastructure storing the history of actions for SDC.
+
+  Very similar to Action but with a different shape, (..., current_timestep+1,
+  dim) for data and (..., current_time_step+1, 1) for valid. Currently, we only
+  consider for SDC leading to num_objects equals to 1, so we use num_saved_actions
+  to replace the dimension for num_objects.
+  """
+
+  def init(self) -> "SDC_actions_history":
+    new_valid = self.valid.at[...,-1,:].set(True)
+    return self.replace(valid=new_valid)
+  
+  def update(self, new_action: Action) -> "SDC_actions_history":
+    new_data = jnp.concatenate([self.data, jnp.expand_dims(new_action.data,-2)], axis=-2)[...,1:,:]
+    new_valid = jnp.concatenate([self.valid, jnp.expand_dims(new_action.valid,-2)], axis=-2)[...,1:,:]
+    return self.replace(data=new_data, valid=new_valid)
 
 @chex.dataclass
 class TrajectoryUpdate:

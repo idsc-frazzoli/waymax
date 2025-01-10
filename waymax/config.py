@@ -218,6 +218,8 @@ class EnvironmentConfig:
       user-controlled objects. Sim agents are applied in the order of that they
       are specified (if multiple sim agents control the same object, only the
       last sim agent will be applied for that object).
+    len_actions_history: Specifies the number of recent actions to be saved in
+      each state.
   """
 
   max_num_objects: int = 128
@@ -231,6 +233,7 @@ class EnvironmentConfig:
       rewards={'overlap': -1.0, 'offroad': -1.0}
   )
   sim_agents: Optional[Sequence[SimAgentConfig]] = None
+  len_actions_history: Optional[int] = None
 
   def __post_init__(self):
     if self.observation is not None:
@@ -238,6 +241,11 @@ class EnvironmentConfig:
         raise ValueError(
             'Initial steps must be greater than the number of '
             'history steps. Please set init_steps >= obs_num_steps.'
+        )
+    if self.len_actions_history is not None:
+      if self.len_actions_history<2:
+        raise ValueError(
+            'Minimal length of actions_history should be 2.'
         )
 
 

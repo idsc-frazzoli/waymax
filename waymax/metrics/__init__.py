@@ -25,3 +25,6 @@ from waymax.metrics.roadgraph import OffroadMetric
 from waymax.metrics.roadgraph import WrongWayMetric
 from waymax.metrics.route import OffRouteMetric
 from waymax.metrics.route import ProgressionMetric
+from waymax.metrics.sigmoid_imitation import SigmoidLogDivergenceMetric
+from waymax.metrics.get_target import GetTargetMetric
+from waymax.metrics.mitigate_oscillation import MitigateOscillationMetric
