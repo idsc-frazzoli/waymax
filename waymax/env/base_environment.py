@@ -18,16 +18,13 @@ This environment is designed to work with multiple objects (autonomous driving
 vehicle and other objects).
 """
 import chex
-from dm_env import specs
 import jax
+from dm_env import specs
 from jax import numpy as jnp
-from waymax import config as _config
-from waymax import datatypes
-from waymax import dynamics as _dynamics
-from waymax import metrics
-from waymax import rewards
-from waymax.env import abstract_environment
-from waymax.env import typedefs as types
+
+from waymax import config as _config, datatypes, dynamics as _dynamics, metrics
+from waymax.env import abstract_environment, typedefs as types
+from waymax.rewards.reward_factory import get_reward_function_from_config
 
 
 class BaseEnvironment(abstract_environment.AbstractEnvironment):
@@ -46,7 +43,7 @@ class BaseEnvironment(abstract_environment.AbstractEnvironment):
       config: Waymax environment configs.
     """
     self._dynamics_model = dynamics_model
-    self._reward_function = rewards.LinearCombinationReward(config.rewards)
+    self._reward_function = get_reward_function_from_config(config.rewards)
     self.config = config
 
   @property
