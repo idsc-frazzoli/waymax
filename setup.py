@@ -39,7 +39,7 @@ setup(
             'tf-keras', # needed for distrax
             'dm_env>=1.6',
             'flax>=0.6.7',
-            'matplotlib>=3.7.1',
+            'matplotlib<3.10',
             'dm-tree>=0.1.8',
             'immutabledict>=2.2.3',
             'Pillow>=9.4.0',

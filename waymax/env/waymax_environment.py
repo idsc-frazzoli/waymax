@@ -15,7 +15,9 @@ class WaymaxDrivingEnvironment(PlanningAgentEnvironment):
     the step function to be consisitent with the GokartRacingEnvironment.
     """
 
-    def observe(self, state: PlanningAgentSimulatorState) -> jax.Array:
+    def observe(self, state: PlanningAgentSimulatorState, rng: jax.Array | None = None,) -> jax.Array:
+        del rng
+
         transformed_obs, pose = sdc_observation_from_state(state, roadgraph_top_k=100, verbose=True)
 
         other_objects_xy = jnp.squeeze(transformed_obs.trajectory.xy).reshape(-1)

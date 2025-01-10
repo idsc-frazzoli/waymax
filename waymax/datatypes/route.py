@@ -119,7 +119,11 @@ class Paths:
 @chex.dataclass
 class GoKartPaths(Paths):
     """Extending the path to have direction information (tangent at each point).
-    #todo if we cna simply extend the Paths class to include the direction information as optional
+    Attributes:
+    dir_x: Path tangent x, shape is (..., num_paths, num_points_per_path) and
+      dtype is float32.
+    dir_y: Path tangent y, shape is (..., num_paths, num_points_per_path) and
+      dtype is float32.
     """
     dir_x: jax.Array
     dir_y: jax.Array
