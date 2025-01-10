@@ -29,6 +29,7 @@ from waymax.agents import actor_core
 from waymax.env import abstract_environment
 from waymax.env import base_environment as _env
 from waymax.env import typedefs as types
+from waymax.rewards.reward_factory import get_reward_function_from_config
 from waymax.utils import geometry
 
 
@@ -207,7 +208,7 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
     """
     self._planning_agent_dynamics = PlanningAgentDynamics(dynamics_model)
     self._state_dynamics = _dynamics.StateDynamics()
-    self._reward_function = rewards.LinearCombinationReward(config.rewards)
+    self._reward_function = get_reward_function_from_config(config.rewards)
     self.config = config
     if config.controlled_object != _config.ObjectType.SDC:
       raise ValueError(
@@ -307,7 +308,9 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
     # The following metrics need to be selected by one hot. For each, we look
     # if they're in the metric_dict, and if so, we select by onehot and replace
     # the metric in the original metric dictionary.
-    multi_agent_metrics_names = ('log_divergence', 'overlap', 'offroad')
+    multi_agent_metrics_names = (
+      'log_divergence', 'overlap', 'offroad', 'sigmoid_log_divergence_2.5', 'get_target_2.5'
+    )
     for metric_name in multi_agent_metrics_names:
       if metric_name in metric_dict:
         one_metric_dict = {metric_name: metric_dict[metric_name]}
@@ -336,7 +339,7 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
 
   @jax.named_scope('PlanningAgentEnvironment.reward')
   def reward(
-      self, state: PlanningSimState, action: datatypes.Action, verbose: bool = False
+      self, state: PlanningSimState, action: datatypes.Action
   ) -> jax.Array:
     """Computes the reward for a transition.
 
@@ -355,17 +358,12 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
           state.object_metadata, self.config.controlled_object
       )
       multi_agent_reward = self._reward_function.compute(
-          state, action, agent_mask, verbose
+          state, action, agent_mask
       )
-      if not verbose:
-        # After onehot, shape: (...)
-        return datatypes.select_by_onehot(
-            multi_agent_reward, state.object_metadata.is_sdc, keepdims=False
-        )
-      else: 
-        return datatypes.select_by_onehot(
-            multi_agent_reward[0], state.object_metadata.is_sdc, keepdims=False
-        ), multi_agent_reward[1]
+      # After onehot, shape: (...)
+      return datatypes.select_by_onehot(
+          multi_agent_reward, state.object_metadata.is_sdc, keepdims=False
+      )
     else:
       reward_spec = specs.Array(shape=(), dtype=jnp.float32)
       return jnp.zeros(state.shape + reward_spec.shape, dtype=reward_spec.dtype)
