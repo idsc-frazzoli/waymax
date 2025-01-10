@@ -1,5 +1,3 @@
-from typing import Tuple
-import copy
 import jax
 import jax.numpy as jnp
 from waymax import datatypes
@@ -9,106 +7,92 @@ from waymax.utils import geometry
 from dm_env.specs import BoundedArray
 
 class WaymaxDrivingEnvironment(PlanningAgentEnvironment):
-    """
-    The WaymaxDrivingEnvironment inherits from the PlanningAgentEnvironment
-    to write our own observation function and override the reset function and
-    the step function to be consisitent with the GokartRacingEnvironment.
-    """
+  """
+  The WaymaxDrivingEnvironment inherits from the PlanningAgentEnvironment
+  to implement the observe function and override other functions when necessary,
+  meanwhile consisitent with the GokartRacingEnvironment.
+  """
 
-    def observe(self, state: PlanningAgentSimulatorState) -> jax.Array:
-        transformed_obs, pose = sdc_observation_from_state(state, roadgraph_top_k=100, verbose=True)
-
-        other_objects_xy = jnp.squeeze(transformed_obs.trajectory.xy).reshape(-1)
-        flattened_mask = transformed_obs.is_ego.reshape(-1)
-        indices = jnp.where(flattened_mask>0, jnp.arange(len(flattened_mask)), -1)
-        indices = jnp.sort(indices)
-        index = indices[-1]
-        rg_xy = jnp.squeeze(transformed_obs.roadgraph_static_points.xy).reshape(-1)
-        sdc_speed = jnp.squeeze(transformed_obs.trajectory.vel_xy)[index,:].reshape(-1)
-
-        # global_tar_1 = state.log_trajectory.xy[index, state.timestep+5].reshape(-1,2)
-        # tar_1 = geometry.transform_points(pts=global_tar_1, pose_matrix=pose.matrix,).reshape(-1)
-        # global_tar_2 = state.log_trajectory.xy[index, state.timestep+10].reshape(-1,2)
-        # tar_2 = geometry.transform_points(pts=global_tar_2, pose_matrix=pose.matrix,).reshape(-1)
-
-        # global_tar = jnp.where(state.timestep>=45, state.log_trajectory.xy[index, -1].reshape(-1,2), state.log_trajectory.xy[index, 45].reshape(-1,2))
-        # tar_1 = geometry.transform_points(pts=global_tar, pose_matrix=pose.matrix,).reshape(-1)
-
-        tars = []
-        for t_ele in range(5):
-          global_xy = state.log_trajectory.xy[index, state.timestep+t_ele].reshape(1,2)
-          tars.append(geometry.transform_points(pts=global_xy, pose_matrix=pose.matrix).reshape(-1))
-          global_vel_xy = state.log_trajectory.vel_xy[index, state.timestep+t_ele].reshape(1,2)
-          tars.append(geometry.transform_direction(pts_dir=global_vel_xy, pose_matrix=pose.matrix).reshape(-1))
-          global_yaw = state.log_trajectory.yaw[index, state.timestep+t_ele].reshape(1,)
-          tars.append((global_yaw + pose.delta_yaw).reshape(1,))
-        tars = jnp.concatenate(tars)
-
-        #TODO: (tian) to delete the zeros in other_objects_xy
-        obs = jnp.concatenate(
-                [rg_xy, tars, sdc_speed],
-                axis=-1)
-        return obs
-
-    # def reset(self, state: datatypes.SimulatorState, rng: jax.Array | None = None) -> Tuple[jax.Array, PlanningAgentSimulatorState]:
-    #     state = super().reset(state, rng)
-    #     obs = self.observe(state)
-
-    #     return obs, state
+  def observe(self, state: PlanningAgentSimulatorState,  rng: jax.Array | None = None,) -> jax.Array:
+    del rng
     
-    # def step(
-    #         self, state: PlanningAgentSimulatorState, action: datatypes.Action, rng: jax.Array | None = None
-    # ) -> Tuple[jax.Array, PlanningAgentSimulatorState, jax.Array, bool, ]:
-    #     last_state = copy.deepcopy(state)
-    #     new_state = super().step(last_state, action, rng)
-    #     reward = super().reward(last_state, action)
-    #     metrics = super().metrics(last_state)
-    #     # TODO: (tian)
-    #     reward_dict = {
-    #         "progression_reward": metrics['log_divergence'].value,
-    #         "orientation_reward": metrics['overlap'].value,
-    #         "offroad_reward": metrics['offroad'].value
-    #     }
-    #     obs = self.observe(new_state)
-    #     done = new_state.is_done
-    #     # done = jnp.logical_or(new_state.is_done, metrics['overlap'].value==1)
-    #     # done = jnp.logical_or(done, metrics['offroad'].value==1)
-    #     obs, new_state = jax.lax.cond(
-    #         done,
-    #         lambda _: self.reset(new_state),
-    #         lambda _: (obs, new_state),
-    #         operand=None
-    #     )
-    #     info = reward_dict
+    transformed_obs, pose = sdc_observation_from_state(state, roadgraph_top_k=100, verbose=True)
+    # 1. road information (relative poses of closest 100 edege points)
+    rg_xy = jnp.squeeze(transformed_obs.roadgraph_static_points.xy).reshape(-1)
+    # 2. own state (velocity_x, velocity_y in local frame)
+    flattened_mask = transformed_obs.is_ego.reshape(-1)
+    indices = jnp.where(flattened_mask>0, jnp.arange(len(flattened_mask)), -1)
+    indices = jnp.sort(indices)
+    index = indices[-1]
+    sdc_speed = jnp.squeeze(transformed_obs.trajectory.vel_xy)[index,:].reshape(-1)
+    # 3. others' state (relative poses and bbox dimensions)
+    distances = jnp.linalg.norm(
+      jnp.squeeze(transformed_obs.trajectory.xy), axis=-1
+    )
+    valid_distances = jnp.where(jnp.logical_and(jnp.squeeze(transformed_obs.trajectory.valid), jnp.logical_not(jnp.squeeze(transformed_obs.is_ego))), distances, 0.0)
+    top_dist, _ = jax.lax.top_k(valid_distances, 1)
+    other_objects_info_raw = jnp.squeeze(transformed_obs.trajectory.stack_fields(['x','y','yaw','length','width']))
+    mask_values = [-top_dist, 0.0, 0.0]
+    for attr in range(3):
+        masked_attr = jnp.where(jnp.squeeze(transformed_obs.trajectory.valid), other_objects_info_raw[:,attr], mask_values[attr])
+        other_objects_info_raw = other_objects_info_raw.at[:,attr].set(masked_attr)
+    other_distances = jnp.where(jnp.logical_not(jnp.squeeze(transformed_obs.is_ego)), distances, float('inf'))
+    _, other_idx = jax.lax.top_k(-other_distances, self.config.max_num_objects-1)
+    other_idx = jnp.sort(other_idx)
+    other_objects_info = (jnp.take_along_axis(other_objects_info_raw, other_idx[..., None], axis=-2)).reshape(-1)
+    # 4. navigation information (relative poses of current reference point and next 5 reference points with stride 2)
+    tars = []
+    stride = 2
+    horizon = 5
+    for t_ele in range(1+horizon):
+      global_xy = state.log_trajectory.xy[index, state.timestep+t_ele*stride].reshape(1,2)
+      tars.append(geometry.transform_points(pts=global_xy, pose_matrix=pose.matrix).reshape(-1))
+      # global_vel_xy = state.log_trajectory.vel_xy[index, state.timestep+t_ele*stride].reshape(1,2)
+      # tars.append(geometry.transform_direction(pts_dir=global_vel_xy, pose_matrix=pose.matrix).reshape(-1))
+      # global_yaw = state.log_trajectory.yaw[index, state.timestep+t_ele*stride].reshape(1,)
+      # tars.append(((global_yaw + pose.delta_yaw + 2*jnp.pi) % (2*jnp.pi) - jnp.pi).reshape(1,))
+    tars = jnp.concatenate(tars)
 
-    #     return jax.lax.stop_gradient(obs), jax.lax.stop_gradient(new_state), reward, done, info
-    
-    def observation_spec(self) -> BoundedArray:
-        # TODO: (tian) find a proper place to define obs_dim
-        dim = 227
-        minimum = -jnp.array([jnp.inf] * dim)
-        maximum = jnp.array([jnp.inf] * dim)
-        specs = BoundedArray((dim,), jnp.float32, minimum, maximum)
-        return specs
-    
-    def action_spec(self) -> BoundedArray:
-        data_spec = self.dynamics.action_spec()
-        return data_spec
-    
-    def termination(self, state: PlanningAgentSimulatorState) -> jax.Array:
-        """reset the environment if the self-driving car is off-road or the episode is done
+    obs = jnp.concatenate(
+      [rg_xy, other_objects_info, tars, sdc_speed], axis=-1
+    )
+    return obs
+  
+  def observation_spec(self) -> BoundedArray:
+    # TODO: (tian) find a proper place to assert obs_dim
+    dim = 200 + 2 + 75 + 12
+    minimum = -jnp.array([jnp.inf] * dim)
+    maximum = jnp.array([jnp.inf] * dim)
+    specs = BoundedArray((dim,), jnp.float32, minimum, maximum)
+    return specs
+  
+  def reset(
+    self, state: datatypes.SimulatorState, rng: jax.Array | None = None
+  ) -> PlanningAgentSimulatorState:
+    init_state: PlanningAgentSimulatorState = super().reset(state, rng)
+    len_actions_history = self.config.len_actions_history
+    init_actions_history = datatypes.SDC_actions_history(data=jnp.zeros(state.shape + (len_actions_history,) + self.action_spec().shape), valid=jnp.zeros((state.shape + (len_actions_history,1,)), dtype=jnp.bool_))
+    init_actions_history = init_actions_history.init()
+    return init_state.replace(actions_history=init_actions_history)
 
-        Args:
-          state: The current state of the simulator
+  def step(
+    self, state: PlanningAgentSimulatorState, action: datatypes.Action, rng: jax.Array | None = None,
+  ) -> PlanningAgentSimulatorState:
+    new_state: PlanningAgentSimulatorState = super().step(state, action, rng)
+    updated_actions_history = state.actions_history.update(action)
+    return new_state.replace(actions_history=updated_actions_history)
 
-        Returns:
-          Boolean array indicating if the episode should terminate
-        """
-        # fixme can be optimized to not recompute all the metrics
-        # metric_dict = self.metrics(state)
-        # is_offroad = metric_dict["offroad"].value.astype(jnp.bool)
-        # is_overlap = metric_dict["overlap"].value.astype(jnp.bool)
-        # condition = jnp.logical_or(is_offroad, state.is_done)
-        # condition = jnp.logical_or(is_overlap, condition)
-        # return condition.squeeze()
-        return state.is_done
+  def action_spec(self) -> BoundedArray:
+    data_spec = self.dynamics.action_spec()
+    return data_spec
+  
+  def termination(self, state: PlanningAgentSimulatorState) -> jax.Array:
+    metric_dict = self.metrics(state)
+    is_offroad = metric_dict["offroad"].value.astype(jnp.bool)
+    is_overlap = metric_dict["overlap"].value.astype(jnp.bool)
+    condition = jnp.logical_or(is_offroad, is_overlap)
+    condition = jnp.logical_or(condition, state.is_done)
+    return condition.squeeze()
+  
+  def truncation(self, state: PlanningAgentSimulatorState) -> jax.Array:
+    return (jnp.zeros(state.shape)).astype(jnp.bool_)
