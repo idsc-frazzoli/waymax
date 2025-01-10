@@ -27,12 +27,7 @@ import jax
 import jax.numpy as jnp
 
 from waymax import config
-from waymax.datatypes import array
-from waymax.datatypes import object_state
-from waymax.datatypes import operations
-from waymax.datatypes import roadgraph
-from waymax.datatypes import route
-from waymax.datatypes import traffic_lights
+from waymax.datatypes import array, action, object_state, operations, roadgraph, route, traffic_lights
 
 
 ArrayLike = jax.typing.ArrayLike
@@ -59,6 +54,7 @@ class SimulatorState:
       (..., num_paths, num_points_per_path).
     roadgraph_points: A optional RoadgraphPoints holding subsampled roadgraph
       points of shape (..., num_points).
+    actions_history: The history of actions for SDC.
   """
 
   sim_trajectory: object_state.Trajectory
@@ -69,6 +65,7 @@ class SimulatorState:
   timestep: jax.typing.ArrayLike
   sdc_paths: Optional[route.Paths] = None
   roadgraph_points: Optional[roadgraph.RoadgraphPoints] = None
+  actions_history: Optional[action.SDC_actions_history] = None
 
   @property
   def shape(self) -> tuple[int, ...]:
@@ -114,6 +111,22 @@ class SimulatorState:
     return operations.dynamic_slice(
         self.log_trajectory, self.timestep, 1, axis=-1
     )
+  
+  @property
+  def current_action_history(self) -> action.Action:
+      """Returns the actions corresponding to the current sim state."""
+      if self.actions_history is None:
+        raise NotImplementedError('Action_history Not Implemented')
+      return operations.dynamic_slice(self.actions_history, -1, 1, axis=-2)
+
+  @property
+  def previous_action_history(self) -> action.Action:
+      """Returns the action corresponding to the previous sim state."""
+      if self.actions_history is None:
+        raise NotImplementedError('Action_history Not Implemented')
+      # if self.timestep == 0:
+      #   raise ValueError('Initial state does not have previous_action_history.')
+      return operations.dynamic_slice(self.actions_history, -2, 1, axis=-2)
 
   def validate(self):
     """Validates shape and type."""

@@ -15,7 +15,9 @@
 """Configs for Waymax Environments."""
 import dataclasses
 import enum
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Callable
+
+import jax
 
 
 class CoordinateFrame(enum.Enum):
@@ -136,8 +138,24 @@ class LinearCombinationRewardConfig:
     rewards: Dictionary of metric names to floats indicating the weight of each
       metric to create a reward of a linear combination.
   """
-
   rewards: dict[str, float]
+
+  @classmethod
+  def default_gokart(cls) -> 'LinearCombinationRewardConfig':
+    return cls(
+        rewards={"gokart_offroad":-4.0, "gokart_progress": 1.0},
+    )
+
+@dataclasses.dataclass(frozen=True)
+class LinearTransformedRewardConfig(LinearCombinationRewardConfig):
+  """Config listing all metrics and their corresponding transform.
+
+  Attributes:
+    rewards: Dictionary of metric names to floats indicating the weight of each
+      metric to create a reward of a linear combination.
+    transform: Dictionary of metric names to functions that apply an additional transform to the metric
+  """
+  transform: dict[str, Callable[[jax.Array], jax.Array]]
 
 
 class ObjectType(enum.Enum):
@@ -200,6 +218,8 @@ class EnvironmentConfig:
       user-controlled objects. Sim agents are applied in the order of that they
       are specified (if multiple sim agents control the same object, only the
       last sim agent will be applied for that object).
+    len_actions_history: Specifies the number of recent actions to be saved in
+      each state.
   """
 
   max_num_objects: int = 128
@@ -213,6 +233,7 @@ class EnvironmentConfig:
       rewards={'overlap': -1.0, 'offroad': -1.0}
   )
   sim_agents: Optional[Sequence[SimAgentConfig]] = None
+  len_actions_history: Optional[int] = None
 
   def __post_init__(self):
     if self.observation is not None:
@@ -220,6 +241,11 @@ class EnvironmentConfig:
         raise ValueError(
             'Initial steps must be greater than the number of '
             'history steps. Please set init_steps >= obs_num_steps.'
+        )
+    if self.len_actions_history is not None:
+      if self.len_actions_history<2:
+        raise ValueError(
+            'Minimal length of actions_history should be 2.'
         )
 
 
