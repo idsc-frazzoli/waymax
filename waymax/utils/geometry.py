@@ -340,6 +340,7 @@ def wrap_yaws(yaws: jax.Array | tf.Tensor) -> jax.Array | tf.Tensor:
 def rotation_matrix(theta):
   """
   Create a 2D rotation matrix for a given angle theta.
+  # fixme incoherent with rotation_matrix_2d that should be preferred
   """
   cos = jnp.cos(theta)
   sin = jnp.sin(theta)
