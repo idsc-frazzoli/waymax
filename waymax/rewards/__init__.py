@@ -17,3 +17,4 @@
 from waymax.rewards.abstract_reward_function import AbstractRewardFunction
 from waymax.rewards.linear_combination_reward import LinearCombinationReward
 from waymax.rewards.linear_transformed_reward import LinearTransformedReward
+from waymax.rewards.lexicographic_reward import LexicographicReward

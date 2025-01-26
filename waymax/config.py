@@ -153,10 +153,23 @@ class LinearTransformedRewardConfig(LinearCombinationRewardConfig):
   Attributes:
     rewards: Dictionary of metric names to floats indicating the weight of each
       metric to create a reward of a linear combination.
-    transform: Dictionary of metric names to functions that apply an additional transform to the metric
+    transform: Dictionary of metric names to functions that apply an additional transform to the metric.
   """
   transform: dict[str, Callable[[jax.Array], jax.Array]]
 
+@dataclasses.dataclass(frozen=True)
+class LexicographicRewardConfig(LinearCombinationRewardConfig):
+  """Config listing all metrics and a lexicographic order for them.
+
+  Attributes:
+    rewards: Dictionary of metric names to floats indicating the weight of each metric.
+    hierarchy: Dictionary of metric names to hierarchies indicating the priority of each
+      metric in the lexicographic order. The hierarchy starts from 1 and the hierarchy with
+      smaller value is more important.
+    num_hierarchies: The number of hierarchies to be considered in the lexicographic order.
+  """
+  hierarchy: dict[str, int]
+  num_hierarchies: int
 
 class ObjectType(enum.Enum):
   """Types of objects that can be controlled by Waymax."""
