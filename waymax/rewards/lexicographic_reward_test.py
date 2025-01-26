@@ -31,7 +31,7 @@ class LexicographicRewardTest(tf.test.TestCase):
         result = reward.compute(simulator_state, None, agent_mask)
 
         # Format the reward
-        expected_reward = jnp.array([[-10.0,0.0],[-10.0,0.0],[-10.0,0.0]])
+        expected_reward = jnp.array([[-10.0, 0.0],[-10.0, 0.0],[-10.0, 0.0]])
         self.assertTrue(jnp.allclose(result, expected_reward))
 
 
