@@ -169,6 +169,13 @@ class LexicographicRewardConfig(LinearCombinationRewardConfig):
   """
   hierarchy: tuple[tuple[str, ...], ...]
 
+  def __post_init__(self):
+    for rule in self.hierarchy:
+      if not isinstance(rule, tuple):
+        raise TypeError(
+          'The elements in hierary must be tuples.'
+        )
+
 class ObjectType(enum.Enum):
   """Types of objects that can be controlled by Waymax."""
 

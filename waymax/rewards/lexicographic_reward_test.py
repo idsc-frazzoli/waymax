@@ -14,7 +14,7 @@ class LexicographicRewardTest(tf.test.TestCase):
                 "offroad": -10.0,
                 "log_divergence": 1.0,
             },
-            hierarchy=(("offroad"),("log_divergence"),),
+            hierarchy=(("offroad",),("log_divergence",),),
         )
 
         reward = LexicographicReward(reward_config)
