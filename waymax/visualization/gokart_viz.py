@@ -16,6 +16,7 @@
 
 from functools import partial
 from typing import Any, Iterable, List, Optional
+import typing
 
 import jax
 import matplotlib
@@ -23,7 +24,6 @@ import matplotlib
 from matplotlib.animation import FuncAnimation
 import numpy as np
 
-from gocarx.env.obs.obs import GokartObs
 from waymax import config as waymax_config
 from waymax import datatypes
 from waymax.datatypes import operations
@@ -33,6 +33,8 @@ from waymax.visualization import utils
 from waymax.visualization import viz
 
 import matplotlib.pyplot as plt
+
+GokartObs = typing.TypeVar("GokartObs")
 
 
 def create_video_simulator_state(
