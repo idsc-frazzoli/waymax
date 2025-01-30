@@ -159,17 +159,15 @@ class LinearTransformedRewardConfig(LinearCombinationRewardConfig):
 
 @dataclasses.dataclass(frozen=True)
 class LexicographicRewardConfig(LinearCombinationRewardConfig):
-  """Config listing all metrics and a lexicographic order for them.
+  """Config listing all metrics and a lexicographic hierarchy for them.
 
   Attributes:
     rewards: Dictionary of metric names to floats indicating the weight of each metric.
-    hierarchy: Dictionary of metric names to hierarchies indicating the priority of each
-      metric in the lexicographic order. The hierarchy starts from 1 and the hierarchy with
-      smaller value is more important.
-    num_hierarchies: The number of hierarchies to be considered in the lexicographic order.
+    hierarchy: Tuple indicating the hierarchies of different rules, with each element representing a rule
+      and the most important rule at the beginning. Its element is also tuple but of metric names which
+      are included in the corresponding rule.
   """
-  hierarchy: dict[str, int]
-  num_hierarchies: int
+  hierarchy: tuple[tuple[str, ...], ...]
 
 class ObjectType(enum.Enum):
   """Types of objects that can be controlled by Waymax."""

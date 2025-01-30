@@ -14,11 +14,7 @@ class LexicographicRewardTest(tf.test.TestCase):
                 "offroad": -10.0,
                 "log_divergence": 1.0,
             },
-            hierarchy={
-                "offroad": 1,
-                "log_divergence": 2,
-            },
-            num_hierarchies=2,
+            hierarchy=(("offroad"),("log_divergence"),),
         )
 
         reward = LexicographicReward(reward_config)
@@ -32,6 +28,7 @@ class LexicographicRewardTest(tf.test.TestCase):
 
         # Format the reward
         expected_reward = jnp.array([[-10.0, 0.0],[-10.0, 0.0],[-10.0, 0.0]])
+        self.assertEqual(result.shape, (3,2))
         self.assertTrue(jnp.allclose(result, expected_reward))
 
 

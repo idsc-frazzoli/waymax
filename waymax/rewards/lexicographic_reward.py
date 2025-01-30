@@ -12,10 +12,15 @@ class LexicographicReward(LinearCombinationReward):
 
   def __init__(self, config: LexicographicRewardConfig):
     super().__init__(LinearCombinationRewardConfig(config.rewards))
-    assert all(r in config.rewards  for r in config.hierarchy)
-    assert max(list(config.hierarchy.values()))==config.num_hierarchies
-    self._hierarchy = config.hierarchy
-    self._num_hierarchies = config.num_hierarchies
+    
+    metrics_with_hierarchy = {}
+    for hierarchy, rule in enumerate(config.hierarchy):
+      for metric in rule:
+        metrics_with_hierarchy[metric] = hierarchy
+    assert all(r in metrics_with_hierarchy for r in config.rewards)
+
+    self._metrics_with_hierarchy = metrics_with_hierarchy
+    self._num_hierarchies = len(config.hierarchy)
 
   def compute(
       self,
@@ -46,5 +51,5 @@ class LexicographicReward(LinearCombinationReward):
     for reward_metric_name, reward_weight in self._config.rewards.items():
       metric_all_agents = all_metrics[reward_metric_name].masked_value()
       metric = metric_all_agents * agent_mask
-      reward = reward.at[...,self._hierarchy[reward_metric_name]-1].add(metric * reward_weight)
+      reward = reward.at[...,self._metrics_with_hierarchy[reward_metric_name]].add(metric * reward_weight)
     return reward
