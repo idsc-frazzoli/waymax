@@ -291,7 +291,7 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
         # if they're in the metric_dict, and if so, we select by onehot and replace
         # the metric in the original metric dictionary.
         multi_agent_metrics_names = (
-            "log_divergence", "overlap", "offroad", "sigmoid_log_divergence_2.5", "get_target_2.5"
+            "log_divergence", "overlap", "offroad", "sigmoid_log_divergence_2.5", "get_target_2.5", "penalize_headback"
         )
         for metric_name in multi_agent_metrics_names:
             if metric_name in metric_dict:
@@ -332,14 +332,14 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
         Returns:
           A float (...) tensor of rewards for the single agent.
         """
-        # Shape: (..., num_objects).
+        # Shape: (..., num_objects, <possibly additional dimensions corresponding to reward as a verctor>).
         if self.config.compute_reward:
             agent_mask = datatypes.get_control_mask(state.object_metadata, self.config.controlled_object)
             multi_agent_reward = self._reward_function.compute(state, action, agent_mask)
-            # After onehot, shape: (...)
+            # After onehot, shape: (..., <possibly additional dimensions corresponding to reward as a verctor>)
             return datatypes.select_by_onehot(multi_agent_reward, state.object_metadata.is_sdc, keepdims=False)
         else:
-            reward_spec = specs.Array(shape=(), dtype=jnp.float32)
+            reward_spec = self.reward_spec()
             return jnp.zeros(state.shape + reward_spec.shape, dtype=reward_spec.dtype)
 
     def action_spec(self) -> datatypes.Action:
