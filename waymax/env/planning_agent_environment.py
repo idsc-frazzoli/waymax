@@ -332,11 +332,11 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
         Returns:
           A float (...) tensor of rewards for the single agent.
         """
-        # Shape: (..., num_objects, <possibly additional dimensions corresponding to reward as a verctor>).
+        # Shape: (..., num_objects, <possibly additional dimensions corresponding to reward as a vector>).
         if self.config.compute_reward:
             agent_mask = datatypes.get_control_mask(state.object_metadata, self.config.controlled_object)
             multi_agent_reward = self._reward_function.compute(state, action, agent_mask)
-            # After onehot, shape: (..., <possibly additional dimensions corresponding to reward as a verctor>)
+            # After onehot, shape: (..., <possibly additional dimensions corresponding to reward as a vector>)
             return datatypes.select_by_onehot(multi_agent_reward, state.object_metadata.is_sdc, keepdims=False)
         else:
             reward_spec = self.reward_spec()
