@@ -1,10 +1,11 @@
 import jax
 import jax.numpy as jnp
+from dm_env.specs import BoundedArray
+
 from waymax import datatypes
 from waymax.env import PlanningAgentEnvironment, PlanningAgentSimulatorState
 from waymax.datatypes.observation import sdc_observation_from_state
 from waymax.utils import geometry
-from dm_env.specs import BoundedArray
 
 class WaymaxDrivingEnvironment(PlanningAgentEnvironment):
   """
@@ -91,8 +92,4 @@ class WaymaxDrivingEnvironment(PlanningAgentEnvironment):
     is_offroad = metric_dict["offroad"].value.astype(jnp.bool)
     is_overlap = metric_dict["overlap"].value.astype(jnp.bool)
     condition = jnp.logical_or(is_offroad, is_overlap)
-    condition = jnp.logical_or(condition, state.is_done)
     return condition.squeeze()
-  
-  def truncation(self, state: PlanningAgentSimulatorState) -> jax.Array:
-    return (jnp.zeros(state.shape)).astype(jnp.bool_)
