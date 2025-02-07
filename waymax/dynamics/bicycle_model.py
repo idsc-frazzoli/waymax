@@ -33,6 +33,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from beartype.typing import Tuple
+
 from waymax import datatypes
 from waymax.dynamics import abstract_dynamics
 from waymax.utils import geometry
@@ -151,14 +153,12 @@ class InvertibleBicycleModel(DynamicsModel):
                 maximum=np.array([1.0, 1.0]),
             )
 
-    def action_spec_array(self) -> jax.Array:
+    def action_spec_array(self) -> Tuple:
         """Action spec for the acceleration steering continuous action space in jax.Array form"""
         if not self._normalize_actions:
-            return jnp.array(
-                [[-self._max_accel, -self._max_steering], [self._max_accel, self._max_steering]], dtype=jnp.float32
-            )
+            return ((-self._max_accel, self._max_accel), (-self._max_steering, self._max_steering))
         else:
-            return jnp.array([[-1.0, -1.0], [1.0, 1.0]])
+            return ((-1.0, 1.0), (-1.0, 1.0))
 
     def _clip_values(self, action_array: jax.Array) -> jax.Array:
         """Clip action values to be within the allowable ranges."""
