@@ -125,7 +125,7 @@ class SimulatorState(Generic[TrajectoryType]):
 
     @property
     def previous_action_history(self) -> action.Action:
-        """Returns the action corresponding to the previous sim state."""
+        """Returns the actions corresponding to the previous sim state."""
         if self.actions_history is None:
             raise NotImplementedError('Action_history Not Implemented')
         # if self.timestep == 0:
