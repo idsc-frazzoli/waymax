@@ -53,15 +53,17 @@ class WaymaxDrivingEnvironment(PlanningAgentEnvironment):
       # global_yaw = state.log_trajectory.yaw[index, state.timestep+t_ele*stride].reshape(1,)
       # tars.append(((global_yaw + pose.delta_yaw + 2*jnp.pi) % (2*jnp.pi) - jnp.pi).reshape(1,))
     tars = jnp.concatenate(tars)
+    # 5. previous actions information (the actions corresponding to the current sim state)
+    prev_actions = state.current_action_history.data.reshape(-1)
 
     obs = jnp.concatenate(
-      [rg_xy, other_objects_info, tars, sdc_speed], axis=-1
+      [rg_xy, other_objects_info, tars, sdc_speed, prev_actions], axis=-1
     )
     return obs
   
   def observation_spec(self) -> BoundedArray:
     # TODO: (tian) find a proper place to assert obs_dim
-    dim = 200 + 2 + 75 + 12
+    dim = 200 + 2 + 75 + 12 + 2
     minimum = -jnp.array([jnp.inf] * dim)
     maximum = jnp.array([jnp.inf] * dim)
     specs = BoundedArray((dim,), jnp.float32, minimum, maximum)
