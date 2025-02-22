@@ -85,7 +85,7 @@ def img_from_fig(fig: matplotlib.figure.Figure) -> np.ndarray:
     # Just enough margin in the figure to display xticks and yticks.
     fig.subplots_adjust(left=0.08, bottom=0.08, right=0.98, top=0.98, wspace=0.0, hspace=0.0)
     fig.canvas.draw()
-    data = np.frombuffer(fig.canvas.buffer_rgba(), dtype=np.uint8)
+    data = np.array(fig.canvas.buffer_rgba(), dtype=np.uint8)
     img = data.reshape(fig.canvas.get_width_height()[::-1] + (4,))
     plt.close(fig)
     return img[:, :, :3]  # Convert RGBA to RGB
