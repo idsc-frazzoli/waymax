@@ -20,12 +20,14 @@ class WaymaxDrivingEnvironment(PlanningAgentEnvironment):
     transformed_obs, pose = sdc_observation_from_state(state, roadgraph_top_k=100, verbose=True)
     # 1. road information (relative poses of closest 100 edege points)
     rg_xy = jnp.squeeze(transformed_obs.roadgraph_static_points.xy).reshape(-1)
-    # 2. own state (velocity_x, velocity_y in local frame)
+    # 2. own state (velocity_x, velocity_y in local frame and bbox dimension)
     flattened_mask = transformed_obs.is_ego.reshape(-1)
     indices = jnp.where(flattened_mask>0, jnp.arange(len(flattened_mask)), -1)
     indices = jnp.sort(indices)
     index = indices[-1]
     sdc_speed = jnp.squeeze(transformed_obs.trajectory.vel_xy)[index,:].reshape(-1)
+    sdc_length = jnp.squeeze(transformed_obs.trajectory.length)[index].reshape(-1)
+    sdc_width = jnp.squeeze(transformed_obs.trajectory.width)[index].reshape(-1)
     # 3. others' state (relative poses and bbox dimensions)
     distances = jnp.linalg.norm(
       jnp.squeeze(transformed_obs.trajectory.xy), axis=-1
@@ -57,13 +59,13 @@ class WaymaxDrivingEnvironment(PlanningAgentEnvironment):
     prev_actions = state.current_action_history.data.reshape(-1)
 
     obs = jnp.concatenate(
-      [rg_xy, other_objects_info, tars, sdc_speed, prev_actions], axis=-1
+      [rg_xy, other_objects_info, tars, sdc_speed, sdc_length, sdc_width, prev_actions], axis=-1
     )
     return obs
   
   def observation_spec(self) -> BoundedArray:
     # TODO: (tian) find a proper place to assert obs_dim
-    dim = 200 + 2 + 75 + 12 + 2
+    dim = 200 + 4 + 75 + 12 + 2
     minimum = -jnp.array([jnp.inf] * dim)
     maximum = jnp.array([jnp.inf] * dim)
     specs = BoundedArray((dim,), jnp.float32, minimum, maximum)
