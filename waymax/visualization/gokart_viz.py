@@ -670,10 +670,10 @@ class VideoPlotter:
             self.fig.canvas.blit(self.ax.bbox)
         else:
             self.fig.canvas.draw()
-        data = np.frombuffer(self.fig.canvas.tostring_rgb(), dtype=np.uint8)
-        img = data.reshape(self.fig.canvas.get_width_height()[::-1] + (3,))
+        data = np.array(self.fig.canvas.buffer_rgba(), dtype=np.uint8)
+        img = data.reshape(self.fig.canvas.get_width_height()[::-1] + (4,))
         if clear_fig:
             self.ax.cla()
         if close_fig:
             plt.close(self.fig)
-        return img
+        return img[:, :, :3]  # Convert RGBA to RGB
