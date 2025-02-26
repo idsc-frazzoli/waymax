@@ -10,7 +10,8 @@ class SigmoidLogDivergenceMetric(abstract_metric.AbstractMetric):
 
     This metric transforms the L2 distance between the controlled object's XY
     location and its position in the logged history at the same timestep into
-    a limited range by using an adapted sigmoid function.
+    a limited positive range by using a flipped and translated sigmoid function.
+    The larger the L2 distance, the closer the return value approaches zero.
     """
 
     def __init__(self, translation: float = 2.5):
