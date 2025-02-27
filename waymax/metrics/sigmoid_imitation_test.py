@@ -31,7 +31,7 @@ class SigmoidLogDivergenceMetricTest(tf.test.TestCase, parameterized.TestCase):
         )
         temp_class = sigmoid_imitation.SigmoidLogDivergenceMetric()
         result = temp_class.compute_sigmoid_log_divergence(
-            object_state.xy, log_state.xy
+            object_state.xy, log_state.xy, temp_class._translation
         )
         expected = jax.nn.sigmoid(-(jnp.ones(dimensions)*2.0 - temp_class._translation))
         self.assertAllClose(result, expected)
