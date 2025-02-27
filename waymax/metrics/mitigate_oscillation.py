@@ -8,8 +8,8 @@ from waymax.metrics import abstract_metric
 class MitigateOscillationMetric(abstract_metric.AbstractMetric):
     """Mitigate oscillation metric.
 
-    This metric returns the product of the recent two actions if
-    they have opposite signs.
+    This metric returns the product of the two most recent actions
+    if they have opposite signs.
     """
 
     @jax.named_scope('MitigateOscillationMetric.compute')

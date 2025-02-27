@@ -8,8 +8,8 @@ from waymax.metrics import abstract_metric
 class PenalizeHeadbackMetric(abstract_metric.AbstractMetric):
     """Penalize headback metric.
 
-    This metric returns returns 1.0 if the velocity along the local x-axis
-    is opposite to the positive direction of the local x-axis.
+    This metric returns 1.0 if the velocity along the local x-axis
+    takes negative value.
     """
 
     @jax.named_scope('PenalizeHeadbackMetric.compute')
