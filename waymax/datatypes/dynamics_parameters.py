@@ -38,7 +38,7 @@ class GokartDynamicsParams(DynamicsParams):
         
   @classmethod
   def zeros(cls, shape: Sequence[int]) -> "GokartDynamicsParams":
-        """Creates a GokartDynamicsParams containing default values."""
+        """Creates a GokartDynamicsParams containing zeros values."""
         return cls(
             Iz=jnp.zeros(shape, jnp.float32),
             front_paj_B=jnp.zeros(shape, jnp.float32),
@@ -50,3 +50,19 @@ class GokartDynamicsParams(DynamicsParams):
             rear_paj_D=jnp.zeros(shape, jnp.float32),
             rear_paj_E=jnp.zeros(shape, jnp.float32),
         )
+        
+  @classmethod
+  def default_gokart(cls, shape: Sequence[int]) -> "GokartDynamicsParams":
+        """Creates a GokartDynamicsParams containing default values."""
+        return cls(
+            Iz=0.7*jnp.ones(shape, jnp.float32),
+            front_paj_B=17.17*jnp.ones(shape, jnp.float32),
+            front_paj_C=1.26*jnp.ones(shape, jnp.float32),
+            front_paj_D=0.8*jnp.ones(shape, jnp.float32),
+            front_paj_E=0.42*jnp.ones(shape, jnp.float32),
+            rear_paj_B=13.02*jnp.ones(shape, jnp.float32),
+            rear_paj_C=1.27*jnp.ones(shape, jnp.float32),
+            rear_paj_D=0.97*jnp.ones(shape, jnp.float32),
+            rear_paj_E=0.21*jnp.ones(shape, jnp.float32),
+        )
+            
