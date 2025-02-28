@@ -22,6 +22,8 @@ from waymax.datatypes.array import MaskedArray
 from waymax.datatypes.array import PyTree
 from waymax.datatypes.constant import TIME_INTERVAL
 from waymax.datatypes.constant import TIMESTEP_MICROS_INTERVAL
+from waymax.datatypes.dynamics_parameters import DynamicsParams
+from waymax.datatypes.dynamics_parameters import GokartDynamicsParams
 from waymax.datatypes.object_state import fill_invalid_trajectory
 from waymax.datatypes.object_state import ObjectMetadata
 from waymax.datatypes.object_state import ObjectTypeIds

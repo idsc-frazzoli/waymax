@@ -27,7 +27,7 @@ import jax
 import jax.numpy as jnp
 
 from waymax import config
-from waymax.datatypes import array, action, object_state, operations, roadgraph, route, traffic_lights
+from waymax.datatypes import array, action, object_state, operations, roadgraph, route, traffic_lights, dynamics_parameters
 from waymax.datatypes.object_state import TrajectoryType
 
 ArrayLike = jax.typing.ArrayLike
@@ -135,6 +135,7 @@ class GoKartSimState(SimulatorState[object_state.GokartTrajectory]):
     """
     actions_history: Optional[action.GokartAction] = None
     sdc_paths: Optional[route.GoKartPaths] = None
+    dynamics_params: Optional[dynamics_parameters.GokartDynamicsParams] = None
 
     @property
     def current_action_history(self) -> action.GokartAction:

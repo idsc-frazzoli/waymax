@@ -50,6 +50,7 @@ class PlanningAgentDynamics(_dynamics.DynamicsModel):
         self,
         action: datatypes.Action,
         trajectory: datatypes.Trajectory,
+        dynamics_params: datatypes.DynamicsParams | None = None,
     ) -> datatypes.TrajectoryUpdate:
         """Computes the pose and velocity updates at timestep."""
 
@@ -59,7 +60,7 @@ class PlanningAgentDynamics(_dynamics.DynamicsModel):
 
         tiled_action = jax.tree_util.tree_map(tile_for_obj_dimension, action)
         tiled_action.validate()
-        return self.wrapped_dynamics.compute_update(tiled_action, trajectory)
+        return self.wrapped_dynamics.compute_update(tiled_action, trajectory, dynamics_params)
 
     @jax.named_scope("PlanningAgentDynamics.forward")
     def forward(
@@ -365,10 +366,14 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
         Returns:
           The next simulation state after taking an action of shape (...).
         """
-                
-        planning_agent_action = self._planning_agent_dynamics.compute_update(
-            action, state.current_sim_trajectory
-        ).as_action()
+        if isinstance(state, PlanningGoKartSimState):
+          planning_agent_action = self._planning_agent_dynamics.compute_update(
+              action, state.current_sim_trajectory, state.dynamics_params
+          ).as_action()
+        else:
+          planning_agent_action = self._planning_agent_dynamics.compute_update(
+              action, state.current_sim_trajectory,
+          ).as_action()
         planning_agent_controlled = state.object_metadata.is_sdc
 
         merged_action = planning_agent_action
