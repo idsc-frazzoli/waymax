@@ -64,6 +64,7 @@ class SimulatorState(Generic[TrajectoryType]):
     timestep: jax.typing.ArrayLike
     sdc_paths: Optional[route.Paths] = None
     roadgraph_points: Optional[roadgraph.RoadgraphPoints] = None
+    dynamics_params: Optional[dynamics_parameters.GokartDynamicsParams] = None
 
     @property
     def shape(self) -> tuple[int, ...]:
@@ -135,7 +136,6 @@ class GoKartSimState(SimulatorState[object_state.GokartTrajectory]):
     """
     actions_history: Optional[action.GokartAction] = None
     sdc_paths: Optional[route.GoKartPaths] = None
-    dynamics_params: Optional[dynamics_parameters.GokartDynamicsParams] = None
 
     @property
     def current_action_history(self) -> action.GokartAction:

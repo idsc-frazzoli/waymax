@@ -366,14 +366,9 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
         Returns:
           The next simulation state after taking an action of shape (...).
         """
-        if isinstance(state, PlanningGoKartSimState):
-          planning_agent_action = self._planning_agent_dynamics.compute_update(
-              action, state.current_sim_trajectory, state.dynamics_params
-          ).as_action()
-        else:
-          planning_agent_action = self._planning_agent_dynamics.compute_update(
-              action, state.current_sim_trajectory,
-          ).as_action()
+        planning_agent_action = self._planning_agent_dynamics.compute_update(
+            action, state.current_sim_trajectory, state.dynamics_params
+        ).as_action()
         planning_agent_controlled = state.object_metadata.is_sdc
 
         merged_action = planning_agent_action

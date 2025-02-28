@@ -14,6 +14,7 @@
 
 """Library for different object dynamics model for Waymax."""
 import abc
+from typing import Optional
 
 import chex
 from dm_env import specs
@@ -87,6 +88,7 @@ class DynamicsModel(abc.ABC):
       self,
       action: datatypes.Action,
       trajectory: datatypes.Trajectory,
+      dynamics_params: Optional[datatypes.DynamicsParams] = None,
   ) -> datatypes.TrajectoryUpdate:
     """Applies actions to current trajectory to produce next timestep update.
 

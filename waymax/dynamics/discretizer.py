@@ -14,6 +14,7 @@
 
 """Library for discretizing continuous values and discretizing wrappers."""
 import functools
+from typing import Optional
 
 from dm_env import specs
 import jax
@@ -153,6 +154,7 @@ class DiscreteActionSpaceWrapper(abstract_dynamics.DynamicsModel):
       self,
       action: datatypes.Action,
       trajectory: datatypes.Trajectory,
+      dynamics_params: Optional[datatypes.DynamicsParams] = None,
   ) -> datatypes.TrajectoryUpdate:
     """Computes the pose and velocity updates.
 
@@ -168,6 +170,7 @@ class DiscreteActionSpaceWrapper(abstract_dynamics.DynamicsModel):
       The trajectory update for timestep of shape
         (..., num_objects, num_timesteps=1).
     """
+    del dynamics_params
     actions_cont = datatypes.Action(
         data=self._discretizer.make_continuous(action.data),
         valid=action.valid,

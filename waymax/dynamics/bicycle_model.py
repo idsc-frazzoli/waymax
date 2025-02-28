@@ -28,6 +28,7 @@ acceleration and steering command range can still be specified by `max_accel`
 and `max_steering` in the class definition function.
 """
 
+from typing import Optional
 from dm_env import specs
 import jax
 import jax.numpy as jnp
@@ -178,6 +179,7 @@ class InvertibleBicycleModel(DynamicsModel):
       self,
       action: datatypes.Action,
       trajectory: datatypes.Trajectory,
+      dynamics_params: Optional[datatypes.DynamicsParams] = None,
   ) -> datatypes.TrajectoryUpdate:
     """Computes the pose and velocity updates at timestep.
 
@@ -197,6 +199,7 @@ class InvertibleBicycleModel(DynamicsModel):
       The trajectory update for timestep of shape
         (..., num_objects, num_timesteps=1).
     """
+    del dynamics_params
     x = trajectory.x
     y = trajectory.y
     vel_x = trajectory.vel_x
