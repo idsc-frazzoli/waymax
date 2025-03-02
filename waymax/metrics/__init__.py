@@ -29,3 +29,4 @@ from waymax.metrics.sigmoid_imitation import SigmoidLogDivergenceMetric
 from waymax.metrics.get_target import GetTargetMetric
 from waymax.metrics.mitigate_oscillation import MitigateOscillationMetric
 from waymax.metrics.penalize_headback import PenalizeHeadbackMetric
+from waymax.metrics.penalize_large_deviation import PenalizeLargeDeviationMetric
