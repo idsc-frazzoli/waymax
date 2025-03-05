@@ -66,6 +66,7 @@ class SimulatorState(Generic[TrajectoryType]):
     sdc_paths: Optional[route.Paths] = None
     roadgraph_points: Optional[roadgraph.RoadgraphPoints] = None
     actions_history: Optional[action.SDC_actions_history] = None
+    dangerous_zone: Optional[object_state.DangerousZone] = None
 
     @property
     def shape(self) -> tuple[int, ...]:

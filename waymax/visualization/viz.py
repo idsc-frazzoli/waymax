@@ -288,6 +288,45 @@ def plot_simulator_state(
   plot_trajectory(
       ax, traj, is_controlled, time_idx=state.timestep, indices=indices
   )  # pytype: disable=wrong-arg-types  # jax-ndarray
+  if state.dangerous_zone is not None:
+    agent_traj_5dof = np.array(
+      traj.stack_fields(['x', 'y', 'length', 'width', 'yaw'])
+    )
+    dangerous_zone_traj_5dof = np.array(
+      state.dangerous_zone.stack_fields(['x', 'y', 'length', 'width', 'yaw'])
+    ) # Forces to np from jnp
+    time_indices = np.tile(
+      np.arange(dangerous_zone_traj_5dof.shape[1])[np.newaxis, :], (dangerous_zone_traj_5dof.shape[0], 1)
+    )
+
+    # show the dangerous zone
+    utils.plot_numpy_bounding_boxes_no_arrow(
+      ax=ax,
+      bboxes=dangerous_zone_traj_5dof[(time_indices == state.timestep) & state.dangerous_zone.valid],
+      color=np.array([1.0, 0.8, 0.0]),
+    )
+
+    # show the agent in danger  
+    danger_check_fn = jax.vamp(geometry.has_overlap, (-2, None), -1)
+    danger_check_fn = jax.vamp(danger_check_fn, (None, -2), -1)
+    # (n_obj, n_zone)
+    danger_condition = danger_check_fn(
+      agent_traj_5dof[:, state.timestep], dangerous_zone_traj_5dof[:, state.timestep]
+    )
+    # Remove overlap against invalid objects.
+    danger_condition = np.where(
+      traj.valid[:, state.timestep, None], danger_condition, False
+    )
+    danger_condition = np.where(
+      state.dangerous_zone.valid[None, :, state.timestep], danger_condition, False
+    )
+    # (n_obj, )
+    danger_agent = np.any(danger_condition, axis=-1)
+    utils.plot_numpy_bounding_boxes(
+      ax=ax,
+      bboxes=agent_traj_5dof[:, state.timestep][danger_agent],
+      color=np.array([0.5, 0.0, 0.5]),
+    )
   if ref:
     ref_traj = state.log_trajectory
     traj_5dof = np.array(

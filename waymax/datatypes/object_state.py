@@ -414,3 +414,111 @@ def fill_invalid_trajectory(traj: TrajectoryType) -> TrajectoryType:
             raise ValueError("Unsupport dtype: %s" % x.dtype)
 
     return jax.tree_util.tree_map(_fill_fn, traj)
+
+@chex.dataclass
+class DangerousZone:
+    """Data structure representing a 2D dangerous zone.
+
+    The shapes of all objects are of shape (..., num_zones, num_timesteps).
+
+    Attributes:
+      x: The x coordinate of each zone at each time step of data type float32.
+      y: The y coordinate of each zone at each time step of data type float32.
+      yaw: Counter-clockwise zone in top-down view (rotation about the Z axis from
+        a unit X vector to the zone direction vector) of shape of data type
+        float32.
+      valid: Validity bit for all zone at all times steps of data type bool.
+      length: The length of each zone at each time step of data type float32.
+        Note for each zone, its length is fixed for all time steps.
+      width: The width of each zone at each time step of data type float32. Note
+        for each zone, its width is fixed for all time steps.
+    """
+
+    x: jax.Array
+    y: jax.Array
+    yaw: jax.Array
+    valid: jax.Array
+    length: jax.Array
+    width: jax.Array
+
+    @property
+    def shape(self) -> tuple[int, ...]:
+        """The Array shape of this trajectory."""
+        return self.x.shape
+
+    @property
+    def num_zones(self) -> int:
+        """The number of objects included in this trajectory per example."""
+        return self.shape[-2]
+
+    @property
+    def num_timesteps(self) -> int:
+        """The length of this trajectory in time."""
+        return self.shape[-1]
+
+    @property
+    def xy(self) -> jax.Array:
+        """Stacked xy location."""
+        return jnp.stack([self.x, self.y], axis=-1)
+
+    def __eq__(self, other: Any) -> bool:
+        return operations.compare_all_leaf_nodes(self, other)
+
+    def stack_fields(self, field_names: Sequence[str]) -> jax.Array:
+        """Returns a concatenated version of a set of field names for Trajectory."""
+        return jnp.stack([getattr(self, field_name) for field_name in field_names], axis=-1)
+
+    @property
+    def bbox_corners(self) -> jax.Array:
+        """Corners of the bounding box spanning the object's shape.
+
+        Returns:
+          Box corners' (x, y) coordinates spanning the object of shape
+            (..., num_objects, num_timesteps, 4, 2). The 4 corners start from the
+            objects' front right corner and go counter-clockwise.
+        """
+        traj_5dof = self.stack_fields(["x", "y", "length", "width", "yaw"])
+        return geometry.corners_from_bboxes(traj_5dof)
+
+    @classmethod
+    def zeros(cls, shape: Sequence[int]) -> "Trajectory":
+        """Creates a Trajectory containing zeros of the specified shape."""
+        return cls(
+            x=jnp.zeros(shape, jnp.float32),
+            y=jnp.zeros(shape, jnp.float32),
+            yaw=jnp.zeros(shape, jnp.float32),
+            valid=jnp.zeros(shape, jnp.bool_),
+            length=jnp.zeros(shape, jnp.float32),
+            width=jnp.zeros(shape, jnp.float32),
+        )
+
+    def validate(self):
+        """Validates shape and type."""
+        chex.assert_equal_shape(
+            [
+                self.x,
+                self.y,
+                self.yaw,
+                self.valid,
+                self.length,
+                self.width,
+            ]
+        )
+        chex.assert_type(
+            [
+                self.x,
+                self.y,
+                self.yaw,
+                self.valid,
+                self.length,
+                self.width,
+            ],
+            [
+                jnp.float32,
+                jnp.float32,
+                jnp.float32,
+                jnp.bool_,
+                jnp.float32,
+                jnp.float32,
+            ],
+        )
