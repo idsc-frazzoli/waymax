@@ -307,8 +307,8 @@ def plot_simulator_state(
     )
 
     # show the agent in danger  
-    danger_check_fn = jax.vamp(geometry.has_overlap, (-2, None), -1)
-    danger_check_fn = jax.vamp(danger_check_fn, (None, -2), -1)
+    danger_check_fn = jax.vmap(geometry.has_overlap, (-2, None), -1)
+    danger_check_fn = jax.vmap(danger_check_fn, (None, -2), -1)
     # (n_obj, n_zone)
     danger_condition = danger_check_fn(
       agent_traj_5dof[:, state.timestep], dangerous_zone_traj_5dof[:, state.timestep]
