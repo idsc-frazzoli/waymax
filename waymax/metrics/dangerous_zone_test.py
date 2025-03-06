@@ -16,7 +16,7 @@ class DangerousZoneMetricTest(tf.test.TestCase, parameterized.TestCase):
     sim_state_init = dataloader.simulator_state_from_womd_dict(
         data_dict, time_key='all'
     )
-    dangerous_zone = datatypes.object_state.DangerousZone(
+    dangerous_zone_init = datatypes.object_state.DangerousZone(
         x = 0.5*jnp.ones((1,91), jnp.float32),
         y = 1.0*jnp.ones((1,91), jnp.float32),
         yaw = 0*jnp.ones((1,91), jnp.float32),
@@ -24,7 +24,7 @@ class DangerousZoneMetricTest(tf.test.TestCase, parameterized.TestCase):
         length = 2.0*jnp.ones((1,91), jnp.float32),
         width = 1.0*jnp.ones((1,91), jnp.float32),
     )
-    sim_state_init = sim_state_init.replace(dangerous_zone = dangerous_zone)
+    sim_state_init = sim_state_init.replace(dangerous_zone = dangerous_zone_init)
     result = dangerous_zone.DangerousZoneMetric().compute(sim_state_init)
     self.assertEqual(result.value.shape, (128,))
     self.assertEqual(result.valid.shape, (128,))
@@ -36,11 +36,10 @@ class DangerousZoneMetricTest(tf.test.TestCase, parameterized.TestCase):
         y = 1.0*jnp.ones((1,1), jnp.float32),
         yaw = 0*jnp.ones((1,1), jnp.float32),
         valid = jnp.ones((1,1), jnp.bool_),
-        length = 2.0*jnp.ones((1,1), jnp.float32),
-        width = 1.0*jnp.ones((1,1), jnp.float32),
+        length = 1.0*jnp.ones((1,1), jnp.float32),
+        width = 2.0*jnp.ones((1,1), jnp.float32),
     )
-    metric = dangerous_zone.DangerousZoneMetric().compute_overlap(traj_with_no_overlaps, dangerous_zone_slice)
-    num_objects = traj_with_no_overlaps.num_objects
+    metric = dangerous_zone.DangerousZoneMetric().danger_check(traj_with_no_overlaps, dangerous_zone_slice)
     with self.subTest('value'):
       self.assertAllEqual(
           metric.value,
@@ -58,10 +57,10 @@ class DangerousZoneMetricTest(tf.test.TestCase, parameterized.TestCase):
         y = 5.0*jnp.ones((1,1), jnp.float32),
         yaw = 0*jnp.ones((1,1), jnp.float32),
         valid = jnp.ones((1,1), jnp.bool_),
-        length = 2.0*jnp.ones((1,1), jnp.float32),
-        width = 1.0*jnp.ones((1,1), jnp.float32),
+        length = 1.0*jnp.ones((1,1), jnp.float32),
+        width = 2.0*jnp.ones((1,1), jnp.float32),
     )
-    metric = dangerous_zone.DangerousZoneMetric().compute_overlap(traj_with_no_overlaps, dangerous_zone_slice)
+    metric = dangerous_zone.DangerousZoneMetric().danger_check(traj_with_no_overlaps, dangerous_zone_slice)
     num_objects = traj_with_no_overlaps.num_objects
     with self.subTest('value'):
       self.assertAllEqual(
