@@ -291,7 +291,7 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
         # if they're in the metric_dict, and if so, we select by onehot and replace
         # the metric in the original metric dictionary.
         multi_agent_metrics_names = (
-            "log_divergence", "overlap", "offroad", "sigmoid_log_divergence_2.5", "get_target_2.5", "penalize_headback", "penalize_large_deviation"
+            "log_divergence", "overlap", "offroad", "sigmoid_log_divergence_2.5", "get_target_2.5", "penalize_headback", "dangerous_zone"
         )
         for metric_name in multi_agent_metrics_names:
             if metric_name in metric_dict:

@@ -17,7 +17,7 @@ from collections.abc import Iterable
 
 from waymax import config as _config, datatypes
 from waymax.metrics import abstract_metric, comfort, imitation, overlap, roadgraph, route
-from waymax.metrics import sigmoid_imitation, get_target, mitigate_oscillation, penalize_headback, penalize_large_deviation
+from waymax.metrics import sigmoid_imitation, get_target, mitigate_oscillation, penalize_headback, dangerous_zone
 
 _METRICS_REGISTRY: dict[str, abstract_metric.AbstractMetric] = {
     "log_divergence": imitation.LogDivergenceMetric(),
@@ -31,7 +31,7 @@ _METRICS_REGISTRY: dict[str, abstract_metric.AbstractMetric] = {
     "get_target_2.5": get_target.GetTargetMetric(),
     "mitigate_oscillation": mitigate_oscillation.MitigateOscillationMetric(),
     "penalize_headback": penalize_headback.PenalizeHeadbackMetric(),
-    "penalize_large_deviation": penalize_large_deviation.PenalizeLargeDeviationMetric(),
+    "dangerous_zone": dangerous_zone.DangerousZoneMetric(),
     # "gokart_progress": gokart_progress.GokartProgressMetric(),
     # "gokart_orientation": gokart_orientation.GokartOrientationMetric(),
     # "gokart_offroad": gokart_offroad.GokartOffroadMetric(),
