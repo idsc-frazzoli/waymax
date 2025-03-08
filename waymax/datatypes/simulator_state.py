@@ -107,6 +107,15 @@ class SimulatorState(Generic[TrajectoryType]):
         timestep = jnp.max(self.timestep - 1, 0)
         return operations.dynamic_slice(self.sim_trajectory, timestep, 1, axis=-1)
 
+    def select_previous_sim_trajectory(self, n_previous_steps: int, slice_size: int = 1) -> TrajectoryType:
+        """Returns the trajectory corresponding to the n_previous_steps sim state."""
+        def _raise_if_negative(n_previous_steps):
+            if n_previous_steps < 0:
+                raise ValueError(f"n_previous_steps ({n_previous_steps}) must be non-negative.")
+        jax.debug.callback(_raise_if_negative, n_previous_steps)
+        timestep = jnp.maximum(self.timestep - n_previous_steps, 0)
+        return operations.dynamic_slice(self.sim_trajectory, timestep, slice_size, axis=-1)
+
     @property
     def current_log_trajectory(self) -> TrajectoryType:
         """Returns the trajectory corresponding to the current sim state."""
@@ -140,13 +149,21 @@ class GoKartSimState(SimulatorState[object_state.GokartTrajectory]):
     @property
     def current_action_history(self) -> action.GokartAction:
         """Returns the actions corresponding to the current sim state."""
-        return operations.dynamic_slice(self.actions_history, self.timestep, 1, axis=-1)
+        return self.select_previous_actions_history(0)
 
     @property
     def previous_action_history(self) -> action.GokartAction:
         """Returns the trajectory corresponding to the previous sim state."""
-        timestep = jnp.maximum(self.timestep - 1, 0)
-        return operations.dynamic_slice(self.actions_history, timestep, 1, axis=-1)
+        return self.select_previous_actions_history(1)
+
+    def select_previous_actions_history(self, n_previous_steps: int, slice_size: int = 1) -> action.GokartAction:
+        """Returns the trajectory corresponding to the n_previous_steps sim state."""
+        def _raise_if_negative(n_previous_steps):
+            if n_previous_steps < 0:
+                raise ValueError(f"n_previous_steps ({n_previous_steps}) must be non-negative.")
+        jax.debug.callback(_raise_if_negative, n_previous_steps)
+        timestep = jnp.maximum(self.timestep - n_previous_steps, 0)
+        return operations.dynamic_slice(self.actions_history, timestep, slice_size, axis=-1)
 
     def __eq__(self, other: Any) -> bool:
         return operations.compare_all_leaf_nodes(self, other)
