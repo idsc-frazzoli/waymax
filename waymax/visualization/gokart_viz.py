@@ -34,12 +34,12 @@ from waymax.visualization import viz
 
 import matplotlib.pyplot as plt
 
-GokartObs = typing.TypeVar("GokartObs")
+GokartObsAbc = typing.TypeVar("GokartObsAbc")
 
 
 def create_video_simulator_state(
     state: datatypes.SimulatorState,
-    obs: GokartObs | None = None,
+    obs: GokartObsAbc | None = None,
     video_path: str | None = None,
     use_log_traj: bool = True,
     n_steps: int = 10,
@@ -105,6 +105,7 @@ class VideoPlotter:
         self.obs_distance_rays_lines = None
         self.obs_future_track_lines = None
         self.obs_prev_poses_lines = None
+        self.action_steering_angle_lines = None
         self.text = None
         self.roadgraph_lines_dict = None
 
@@ -130,7 +131,7 @@ class VideoPlotter:
     def plot_sequence_simulator_state(
         self,
         state: datatypes.SimulatorState,
-        obs: GokartObs | None,
+        obs: GokartObsAbc | None,
         use_log_traj: bool = True,
         n_steps: int = 10,
         interval: int = 100,
@@ -170,7 +171,7 @@ class VideoPlotter:
             def animate_step(
                 i: int,
                 state: datatypes.GoKartSimState,
-                obs: GokartObs | None,
+                obs: GokartObsAbc | None,
                 use_log_traj: bool,
                 highlight_obj: waymax_config.ObjectType,
                 ref: bool,
@@ -189,6 +190,7 @@ class VideoPlotter:
                     self.obs_distance_rays_lines,
                     self.obs_future_track_lines,
                     self.obs_prev_poses_lines,
+                    self.action_steering_angle_lines,
                 ]:
                     if line is not None:
                         artists.extend(line)
@@ -233,7 +235,7 @@ class VideoPlotter:
     def plot_simulator_state(
         self,
         state: datatypes.SimulatorState,
-        obs: GokartObs | None = None,
+        obs: GokartObsAbc | None = None,
         use_log_traj: bool = True,
         highlight_obj: waymax_config.ObjectType = waymax_config.ObjectType.SDC,
         ref: bool = False,
@@ -285,8 +287,11 @@ class VideoPlotter:
                     traj_5dof[valid_controlled][::5, 1],
                 )
 
-        if obs is not None:
+        if self.viz_config.viz_obs and obs is not None:
             self.plot_obs(traj=traj, timestep=state.timestep, obs=obs)
+            
+        if self.viz_config.viz_actions:
+            self.plot_actions(traj=traj, timestep=state.timestep, state=state)
 
         # 2. Plots road graph elements.
         # assume roadgraph points do not change over time. Plot only once.
@@ -323,7 +328,7 @@ class VideoPlotter:
         self,
         traj: datatypes.Trajectory,
         timestep: int,
-        obs: GokartObs,
+        obs: GokartObsAbc,
     ) -> None:
 
         # plot rays
@@ -362,6 +367,63 @@ class VideoPlotter:
                 rel_prev_poses_yaw=obs.prev_pose_yaw.squeeze(),
                 alpha=0.9,
             )
+            
+    def plot_actions(
+        self,
+        traj: datatypes.GokartTrajectory,
+        timestep: int,
+        state: datatypes.GoKartSimState,
+    ):
+        position = traj.xy[0, timestep, :]
+        yaw = traj.yaw[0, timestep]
+        actions = state.actions_history
+        steering_angle = actions.steering_angle[0, timestep]
+        self.plot_steering_angle_action(
+            position,
+            yaw,
+            steering_angle=steering_angle,
+            color=np.array([0.0, 0.0, 1.0]),
+            alpha=0.9,
+        )
+        
+    def plot_steering_angle_action(
+        self,
+        position: np.ndarray,
+        yaw: np.ndarray,
+        steering_angle: np.ndarray,
+        color: np.ndarray,
+        alpha: Optional[float] = 1.0,
+    ):
+        len_arrow = 0.8
+        # angle_cap_arrow = np.pi / 7
+        
+        offset_front_car = 0.75
+
+        start_arrow = position + offset_front_car * np.array([np.cos(yaw), np.sin(yaw)])
+        # end_arrow = start_arrow + len_arrow * np.array(
+        #     [np.cos(yaw + steering_angle), np.sin(yaw + steering_angle)])
+        # left_cap_arrow = end_arrow + len_arrow/2 * np.array(
+        #     [np.cos(yaw + steering_angle + angle_cap_arrow), np.sin(yaw + steering_angle + angle_cap_arrow)])
+        # right_cap_arrow = end_arrow + len_arrow/2 * np.array(
+        #     [np.cos(yaw + steering_angle - angle_cap_arrow), np.sin(yaw + steering_angle - angle_cap_arrow)])
+        
+        # steering_arrows_x = [start_arrow[0, :], end_arrow[0, :], left_cap_arrow[0, :], end_arrow[0, :], right_cap_arrow[0, :]]
+        # steering_arrows_y = [start_arrow[1, :], end_arrow[1, :], left_cap_arrow[1, :], end_arrow[1, :], right_cap_arrow[1, :]]
+        
+        dx, dy = len_arrow * np.array([np.cos(yaw + steering_angle), np.sin(yaw + steering_angle)])
+        if self.action_steering_angle_lines is not None:
+            self.action_steering_angle_lines[0].set_data(
+                x=start_arrow[0], y=start_arrow[1], dx=dx, dy=dy)
+        else:
+            self.action_steering_angle_lines = (self.ax.arrow(
+                start_arrow[0], start_arrow[1],
+                dx, dy,
+                width=0.1,
+                zorder=5,
+                color=color,
+                alpha=alpha,
+            ), )
+            
 
     def plot_trajectory(
         self,
@@ -708,10 +770,14 @@ class VideoPlotter:
         prev_yaws = yaw + rel_prev_poses_yaw
         
         # draw heading arrows for previous poses
+        len_arrow = 0.4
+        angle_cap_arrow = np.pi / 7
         start_arrow = np.array(prev_positions)
-        end_arrow = start_arrow + 0.3 * np.array([np.cos(prev_yaws), np.sin(prev_yaws)])
-        left_cap_arrow = start_arrow + 0.15 * np.array([np.cos(prev_yaws + np.pi / 6), np.sin(prev_yaws + np.pi / 6)])
-        right_cap_arrow = start_arrow + 0.15 * np.array([np.cos(prev_yaws - np.pi / 6), np.sin(prev_yaws - np.pi / 6)])
+        end_arrow = start_arrow + len_arrow * np.array([np.cos(prev_yaws), np.sin(prev_yaws)])
+        left_cap_arrow = start_arrow + len_arrow/2 * np.array(
+            [np.cos(prev_yaws + angle_cap_arrow), np.sin(prev_yaws + angle_cap_arrow)])
+        right_cap_arrow = start_arrow + len_arrow/2 * np.array(
+            [np.cos(prev_yaws - angle_cap_arrow), np.sin(prev_yaws - angle_cap_arrow)])
         
         heading_arrows_x = [start_arrow[0, :], end_arrow[0, :], left_cap_arrow[0, :], end_arrow[0, :], right_cap_arrow[0, :]]
         heading_arrows_y = [start_arrow[1, :], end_arrow[1, :], left_cap_arrow[1, :], end_arrow[1, :], right_cap_arrow[1, :]]
@@ -785,6 +851,7 @@ class VideoPlotter:
                 self.obs_distance_rays_lines,
                 self.obs_future_track_lines,
                 self.obs_prev_poses_lines,
+                self.action_steering_angle_lines,
             ]:
                 if lines is not None:
                     for line in lines:
