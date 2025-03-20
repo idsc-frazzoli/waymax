@@ -15,9 +15,14 @@
 """Configs for Waymax Environments."""
 import dataclasses
 import enum
-from typing import Optional, Sequence, Callable
+from typing import Any, Optional, Sequence, Callable, Union
 
 import jax
+import jax.numpy as jnp
+from jaxtyping import Int, Float
+
+
+RewardsUpdateFunc = Callable[['LinearTransformedRewardConfig', Int[jax.Array, "1"], Any], 'LinearTransformedRewardConfig']
 
 
 class CoordinateFrame(enum.Enum):
@@ -138,13 +143,21 @@ class LinearCombinationRewardConfig:
     rewards: Dictionary of metric names to floats indicating the weight of each
       metric to create a reward of a linear combination.
   """
-  rewards: dict[str, float]
+  rewards: dict[str, jax.Array]
+  
+  def __post_init__(self) -> None:
+    # Ensure rewards are converted to jax.Array
+    object.__setattr__(self, "rewards",
+                       {k: jnp.array(v, dtype=jnp.float32).reshape((1)) for k, v in self.rewards.items()})
 
   @classmethod
   def default_gokart(cls) -> 'LinearCombinationRewardConfig':
     return cls(
         rewards={"gokart_offroad":-4.0, "gokart_progress": 1.0},
     )
+    
+  def update(self, train_it: Int[jax.Array, "1"], *args, **kwargs) -> 'LinearCombinationRewardConfig':
+      return self
 
 @dataclasses.dataclass(frozen=True)
 class LinearTransformedRewardConfig(LinearCombinationRewardConfig):
@@ -156,6 +169,13 @@ class LinearTransformedRewardConfig(LinearCombinationRewardConfig):
     transform: Dictionary of metric names to functions that apply an additional transform to the metric
   """
   transform: dict[str, Callable[[jax.Array], jax.Array]]
+  rewards_update_func: Optional[RewardsUpdateFunc] = None
+  
+  def update(self, train_it: Int[jax.Array, "1"], *args, **kwargs) -> 'LinearTransformedRewardConfig':
+    if self.rewards_update_func is not None:
+      return self.rewards_update_func(self, train_it, *args, **kwargs)
+    else:
+      return self
 
 
 class ObjectType(enum.Enum):

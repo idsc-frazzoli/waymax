@@ -219,6 +219,15 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
     @property
     def dynamics(self) -> _dynamics.DynamicsModel:
         return self._planning_agent_dynamics
+      
+    def update_config(self, config: _config.EnvironmentConfig) -> None:
+        """Updates the environment configuration.
+
+        Args:
+          config: New configuration to update the environment with.
+        """
+        self._reward_function = get_reward_function_from_config(config.rewards)
+        self.config = config
 
     def reset(self, state: datatypes.SimulatorState, rng: jax.Array | None = None) -> PlanningAgentSimulatorState:
         """Initializes the simulation state.
