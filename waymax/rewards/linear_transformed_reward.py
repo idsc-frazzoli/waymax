@@ -1,7 +1,9 @@
+from typing import Tuple, Union
 import jax
 
 from waymax import datatypes, metrics
 from waymax.config import LinearTransformedRewardConfig, LinearCombinationRewardConfig
+from waymax.metrics import abstract_metric
 from waymax.rewards import LinearCombinationReward
 import jax.numpy as jnp
 
@@ -20,7 +22,8 @@ class LinearTransformedReward(LinearCombinationReward):
       simulator_state: datatypes.SimulatorState,
       action: datatypes.Action,
       agent_mask: jax.Array,
-  ) -> jax.Array:
+      return_metrics: bool = False,
+  ) -> Union[jax.Array, Tuple[jax.Array, dict[str, abstract_metric.MetricResult]]]:
     """Computes the reward as a linear combination of metrics.
 
     Args:
@@ -42,4 +45,7 @@ class LinearTransformedReward(LinearCombinationReward):
       metric_all_agents = all_metrics[reward_metric_name].masked_value()
       metric = metric_all_agents * agent_mask
       reward += self._transform[reward_metric_name](metric) * reward_weight
-    return reward
+    if return_metrics:
+      return reward, all_metrics
+    else:
+      return reward

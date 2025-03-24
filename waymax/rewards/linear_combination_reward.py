@@ -13,11 +13,13 @@
 # limitations under the License.
 
 """Reward functions for the Waymax environment."""
+from typing import Tuple, Union
 import jax
 import jax.numpy as jnp
 from waymax import config as _config
 from waymax import datatypes
 from waymax import metrics
+from waymax.metrics import abstract_metric
 from waymax.rewards import abstract_reward_function
 
 
@@ -34,7 +36,8 @@ class LinearCombinationReward(abstract_reward_function.AbstractRewardFunction):
       simulator_state: datatypes.SimulatorState,
       action: datatypes.Action,
       agent_mask: jax.Array,
-  ) -> jax.Array:
+      return_metrics: bool = False,
+  ) -> Union[jax.Array, Tuple[jax.Array, dict[str, abstract_metric.MetricResult]]]:
     """Computes the reward as a linear combination of metrics.
 
     Args:
@@ -56,7 +59,10 @@ class LinearCombinationReward(abstract_reward_function.AbstractRewardFunction):
       metric_all_agents = all_metrics[reward_metric_name].masked_value()
       metric = metric_all_agents * agent_mask
       reward += metric * reward_weight
-    return reward
+    if return_metrics:
+      return reward, all_metrics
+    else:
+      return reward
 
 
 def _validate_reward_metrics(config: _config.LinearCombinationRewardConfig):

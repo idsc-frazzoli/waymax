@@ -22,7 +22,7 @@ import jax.numpy as jnp
 from jaxtyping import Int, Float
 
 
-RewardsUpdateFunc = Callable[['LinearTransformedRewardConfig', Int[jax.Array, "1"], Any], 'LinearTransformedRewardConfig']
+RewardsUpdateFunc = Callable[['LinearTransformedRewardConfig', Any, Any], 'LinearTransformedRewardConfig']
 
 
 class CoordinateFrame(enum.Enum):
@@ -156,8 +156,11 @@ class LinearCombinationRewardConfig:
         rewards={"gokart_offroad":-4.0, "gokart_progress": 1.0},
     )
     
-  def update(self, train_it: Int[jax.Array, "1"], *args, **kwargs) -> 'LinearCombinationRewardConfig':
+  def update(self, *args, **kwargs) -> 'LinearCombinationRewardConfig':
       return self
+    
+  def __str__(self) -> str:
+      return f"{self.__class__.__name__}(rewards={self.rewards})"
 
 @dataclasses.dataclass(frozen=True)
 class LinearTransformedRewardConfig(LinearCombinationRewardConfig):
@@ -171,9 +174,9 @@ class LinearTransformedRewardConfig(LinearCombinationRewardConfig):
   transform: dict[str, Callable[[jax.Array], jax.Array]]
   rewards_update_func: Optional[RewardsUpdateFunc] = None
   
-  def update(self, train_it: Int[jax.Array, "1"], *args, **kwargs) -> 'LinearTransformedRewardConfig':
+  def update(self, *args, **kwargs) -> 'LinearTransformedRewardConfig':
     if self.rewards_update_func is not None:
-      return self.rewards_update_func(self, train_it, *args, **kwargs)
+      return self.rewards_update_func(self, *args, **kwargs)
     else:
       return self
 

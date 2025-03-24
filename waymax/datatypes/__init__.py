@@ -24,6 +24,10 @@ from waymax.datatypes.constant import TIME_INTERVAL
 from waymax.datatypes.constant import TIMESTEP_MICROS_INTERVAL
 from waymax.datatypes.dynamics_parameters import DynamicsParams
 from waymax.datatypes.dynamics_parameters import GokartDynamicsParams
+from waymax.datatypes.conditioning_parameters import ConditioningParams
+from waymax.datatypes.conditioning_parameters import GokartConditioningParams
+from waymax.datatypes.curriculum import CurriculumParams
+from waymax.datatypes.curriculum import GokartCurriculumParams
 from waymax.datatypes.object_state import fill_invalid_trajectory
 from waymax.datatypes.object_state import ObjectMetadata
 from waymax.datatypes.object_state import ObjectTypeIds

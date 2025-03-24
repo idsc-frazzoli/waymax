@@ -34,12 +34,12 @@ from waymax.visualization import viz
 
 import matplotlib.pyplot as plt
 
-GokartObsAbc = typing.TypeVar("GokartObsAbc")
+GokartObsStorage = typing.TypeVar("GokartObsStorage")
 
 
 def create_video_simulator_state(
     state: datatypes.SimulatorState,
-    obs: GokartObsAbc | None = None,
+    obs: GokartObsStorage | None = None,
     video_path: str | None = None,
     use_log_traj: bool = True,
     n_steps: int = 10,
@@ -106,7 +106,8 @@ class VideoPlotter:
         self.obs_future_track_lines = None
         self.obs_prev_poses_lines = None
         self.action_steering_angle_lines = None
-        self.text = None
+        self.text_id = None
+        self.text_params = None
         self.roadgraph_lines_dict = None
 
         self.name_trajectory_lines = "trajectory_lines"
@@ -131,7 +132,7 @@ class VideoPlotter:
     def plot_sequence_simulator_state(
         self,
         state: datatypes.SimulatorState,
-        obs: GokartObsAbc | None,
+        obs: GokartObsStorage | None,
         use_log_traj: bool = True,
         n_steps: int = 10,
         interval: int = 100,
@@ -164,22 +165,27 @@ class VideoPlotter:
             if len(state.shape) != 1:
                 raise ValueError(f"Expecting one batch dimension, got {len(state.shape)}")
             state = viz._index_pytree(state, batch_idx)
-            obs = viz._index_pytree(obs, batch_idx)
+            if obs is not None:
+                obs.observations = viz._index_pytree(obs.observations, batch_idx)
 
         if self.video_path is not None:
 
             def animate_step(
                 i: int,
                 state: datatypes.GoKartSimState,
-                obs: GokartObsAbc | None,
+                obs: GokartObsStorage | None,
                 use_log_traj: bool,
                 highlight_obj: waymax_config.ObjectType,
                 ref: bool,
             ) -> Iterable[matplotlib.lines.Line2D]:
                 state = state.replace(timestep=i)
-                obs_t = operations.dynamic_slice(obs, i, 1, axis=0) if obs is not None else None
+                if obs is not None:
+                    obs_t = obs.replace(
+                        observations=operations.dynamic_slice(obs.observations, i, 1, axis=0))
+                else:
+                    obs_t = None
 
-                self.plot_simulator_state(state, use_log_traj, highlight_obj, ref, obs)
+                self.plot_simulator_state(state, use_log_traj, highlight_obj, ref, obs_t)
 
                 artists = []
                 for line in [
@@ -196,8 +202,10 @@ class VideoPlotter:
                         artists.extend(line)
                 if not self.plot_last_history_only and self.history_lines is not None:
                     artists.extend(self.history_lines)
-                if self.text is not None:
-                    artists.append(self.text)
+                if self.text_id is not None:
+                    artists.append(self.text_id)
+                if self.text_params is not None:
+                    artists.append(self.text_params)
 
                 return artists
 
@@ -223,7 +231,11 @@ class VideoPlotter:
                 self.ax_background = self.fig.canvas.copy_from_bbox(self.ax.bbox)
             for i in range(n_steps):
                 state = state.replace(timestep=i)
-                obs_t = operations.dynamic_slice(obs, i, 1, axis=0) if obs is not None else None
+                if obs is not None:
+                    obs_t = obs.replace(
+                        observations=operations.dynamic_slice(obs.observations, i, 1, axis=0))
+                else:
+                    obs_t = None
                 self.plot_simulator_state(state, obs_t, use_log_traj, highlight_obj, ref)
                 img = self.img_from_fig(close_fig=False, clear_fig=False, blit=blit)
                 imgs.append(img)
@@ -235,7 +247,7 @@ class VideoPlotter:
     def plot_simulator_state(
         self,
         state: datatypes.SimulatorState,
-        obs: GokartObsAbc | None = None,
+        obs: GokartObsStorage | None = None,
         use_log_traj: bool = True,
         highlight_obj: waymax_config.ObjectType = waymax_config.ObjectType.SDC,
         ref: bool = False,
@@ -292,6 +304,8 @@ class VideoPlotter:
             
         if self.viz_config.viz_actions:
             self.plot_actions(traj=traj, timestep=state.timestep, state=state)
+            
+        self.plot_params(traj=traj, timestep=state.timestep, state=state)
 
         # 2. Plots road graph elements.
         # assume roadgraph points do not change over time. Plot only once.
@@ -328,7 +342,7 @@ class VideoPlotter:
         self,
         traj: datatypes.Trajectory,
         timestep: int,
-        obs: GokartObsAbc,
+        obs: GokartObsStorage,
     ) -> None:
 
         # plot rays
@@ -386,6 +400,39 @@ class VideoPlotter:
             alpha=0.9,
         )
         
+    def plot_params(
+        self,
+        traj: datatypes.GokartTrajectory,
+        timestep: int,
+        state: datatypes.GoKartSimState,
+    ):
+
+        if hasattr(state, "conditioning_params"):
+            self.plot_conditioning_max_vel_x(
+                max_vel_x=state.conditioning_params.max_vel_x[..., 0],
+            )
+        
+    def plot_conditioning_max_vel_x(
+        self,
+        max_vel_x: float,
+    ):
+        # plot text as info on the corner of the axis plot
+        text = f"max velx:{np.array(max_vel_x)[0]:.1f}"
+        text_pos = (0.8, 0.95)
+        if self.text_params is not None:
+            self.text_params.set_text(text)
+            self.text_params.set_position(text_pos)
+        else:
+            self.text_params = self.ax.text(
+                text_pos[0],
+                text_pos[1],
+                text,
+                fontsize=10,
+                bbox=dict(facecolor='white', alpha=0.9),
+                transform=self.ax.transAxes,
+                zorder=10,
+            )
+        
     def plot_steering_angle_action(
         self,
         position: np.ndarray,
@@ -394,22 +441,11 @@ class VideoPlotter:
         color: np.ndarray,
         alpha: Optional[float] = 1.0,
     ):
-        len_arrow = 0.8
-        # angle_cap_arrow = np.pi / 7
-        
+        len_arrow = 0.8        
         offset_front_car = 0.75
 
         start_arrow = position + offset_front_car * np.array([np.cos(yaw), np.sin(yaw)])
-        # end_arrow = start_arrow + len_arrow * np.array(
-        #     [np.cos(yaw + steering_angle), np.sin(yaw + steering_angle)])
-        # left_cap_arrow = end_arrow + len_arrow/2 * np.array(
-        #     [np.cos(yaw + steering_angle + angle_cap_arrow), np.sin(yaw + steering_angle + angle_cap_arrow)])
-        # right_cap_arrow = end_arrow + len_arrow/2 * np.array(
-        #     [np.cos(yaw + steering_angle - angle_cap_arrow), np.sin(yaw + steering_angle - angle_cap_arrow)])
-        
-        # steering_arrows_x = [start_arrow[0, :], end_arrow[0, :], left_cap_arrow[0, :], end_arrow[0, :], right_cap_arrow[0, :]]
-        # steering_arrows_y = [start_arrow[1, :], end_arrow[1, :], left_cap_arrow[1, :], end_arrow[1, :], right_cap_arrow[1, :]]
-        
+
         dx, dy = len_arrow * np.array([np.cos(yaw + steering_angle), np.sin(yaw + steering_angle)])
         if self.action_steering_angle_lines is not None:
             self.action_steering_angle_lines[0].set_data(
@@ -469,12 +505,12 @@ class VideoPlotter:
             for i in range(num_obj):
                 if not traj.valid[i, time_idx]:
                     continue
-                if self.text is not None:
+                if self.text_id is not None:
                     if num_obj != 1:
-                        self.text.set_text(f"{indices[i]}")
-                    self.text.set_position((traj_5dof[i, time_idx, 0] - 2, traj_5dof[i, time_idx, 1] + 2))
+                        self.text_id.set_text(f"{indices[i]}")
+                    self.text_id.set_position((traj_5dof[i, time_idx, 0] - 2, traj_5dof[i, time_idx, 1] + 2))
                 else:
-                    self.text = self.ax.text(
+                    self.text_id = self.ax.text(
                         traj_5dof[i, time_idx, 0] - 2,
                         traj_5dof[i, time_idx, 1] + 2,
                         f"{indices[i]}",
@@ -856,8 +892,10 @@ class VideoPlotter:
                 if lines is not None:
                     for line in lines:
                         self.ax.draw_artist(line)
-            if self.text is not None:
-                self.ax.draw_artist(self.text)
+            if self.text_id is not None:
+                self.ax.draw_artist(self.text_id)
+            if self.text_params is not None:
+                self.ax.draw_artist(self.text_params)
             self.fig.canvas.blit(self.ax.bbox)
         else:
             self.fig.canvas.draw()

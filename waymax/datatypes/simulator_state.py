@@ -27,7 +27,8 @@ import jax
 import jax.numpy as jnp
 
 from waymax import config
-from waymax.datatypes import array, action, object_state, operations, roadgraph, route, traffic_lights, dynamics_parameters
+from waymax.datatypes import array, action, object_state, operations, roadgraph, route, \
+    traffic_lights, dynamics_parameters, conditioning_parameters, curriculum
 from waymax.datatypes.object_state import TrajectoryType
 
 ArrayLike = jax.typing.ArrayLike
@@ -109,10 +110,6 @@ class SimulatorState(Generic[TrajectoryType]):
 
     def select_previous_sim_trajectory(self, n_previous_steps: int, slice_size: int = 1) -> TrajectoryType:
         """Returns the trajectory corresponding to the n_previous_steps sim state."""
-        def _raise_if_negative(n_previous_steps):
-            if n_previous_steps < 0:
-                raise ValueError(f"n_previous_steps ({n_previous_steps}) must be non-negative.")
-        jax.debug.callback(_raise_if_negative, n_previous_steps)
         timestep = jnp.maximum(self.timestep - n_previous_steps, 0)
         return operations.dynamic_slice(self.sim_trajectory, timestep, slice_size, axis=-1)
 
@@ -145,6 +142,8 @@ class GoKartSimState(SimulatorState[object_state.GokartTrajectory]):
     """
     actions_history: Optional[action.GokartAction] = None
     sdc_paths: Optional[route.GoKartPaths] = None
+    conditioning_params: Optional[conditioning_parameters.GokartConditioningParams] = None
+    curriculum_params: Optional[curriculum.GokartCurriculumParams] = None
 
     @property
     def current_action_history(self) -> action.GokartAction:
@@ -158,10 +157,6 @@ class GoKartSimState(SimulatorState[object_state.GokartTrajectory]):
 
     def select_previous_actions_history(self, n_previous_steps: int, slice_size: int = 1) -> action.GokartAction:
         """Returns the trajectory corresponding to the n_previous_steps sim state."""
-        def _raise_if_negative(n_previous_steps):
-            if n_previous_steps < 0:
-                raise ValueError(f"n_previous_steps ({n_previous_steps}) must be non-negative.")
-        jax.debug.callback(_raise_if_negative, n_previous_steps)
         timestep = jnp.maximum(self.timestep - n_previous_steps, 0)
         return operations.dynamic_slice(self.actions_history, timestep, slice_size, axis=-1)
 
