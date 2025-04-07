@@ -14,7 +14,7 @@
 
 """Waymax environment for tasks relating to Planning for the ADV."""
 
-from typing import Sequence, Union
+from typing import Optional, Sequence, Tuple, Union
 
 import chex
 from dm_env import specs
@@ -29,6 +29,7 @@ from waymax.agents import actor_core
 from waymax.env import abstract_environment
 from waymax.env import base_environment as _env
 from waymax.env import typedefs as types
+from waymax.metrics import abstract_metric
 from waymax.rewards.reward_factory import get_reward_function_from_config
 from waymax.utils import geometry
 
@@ -50,6 +51,7 @@ class PlanningAgentDynamics(_dynamics.DynamicsModel):
         self,
         action: datatypes.Action,
         trajectory: datatypes.Trajectory,
+        dynamics_params: datatypes.DynamicsParams | None = None,
     ) -> datatypes.TrajectoryUpdate:
         """Computes the pose and velocity updates at timestep."""
 
@@ -59,7 +61,7 @@ class PlanningAgentDynamics(_dynamics.DynamicsModel):
 
         tiled_action = jax.tree_util.tree_map(tile_for_obj_dimension, action)
         tiled_action.validate()
-        return self.wrapped_dynamics.compute_update(tiled_action, trajectory)
+        return self.wrapped_dynamics.compute_update(tiled_action, trajectory, dynamics_params)
 
     @jax.named_scope("PlanningAgentDynamics.forward")
     def forward(
@@ -218,6 +220,15 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
     @property
     def dynamics(self) -> _dynamics.DynamicsModel:
         return self._planning_agent_dynamics
+      
+    def update_config(self, config: _config.EnvironmentConfig) -> None:
+        """Updates the environment configuration.
+
+        Args:
+          config: New configuration to update the environment with.
+        """
+        self._reward_function = get_reward_function_from_config(config.rewards)
+        self.config = config
 
     def reset(self, state: datatypes.SimulatorState, rng: jax.Array | None = None) -> PlanningAgentSimulatorState:
         """Initializes the simulation state.
@@ -269,7 +280,9 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
         return state
 
     @jax.named_scope("PlanningAgentEnvironment.metrics")
-    def metrics(self, state: PlanningSimState) -> types.Metrics:
+    def metrics(self, state: PlanningSimState,
+                precomputed_metrics: Optional[dict[str, abstract_metric.MetricResult]] = None
+    ) -> types.Metrics:
         """Computes the metrics for the single agent wrapper.
 
         The metrics to be computed are based on those specified by the configuration
@@ -286,7 +299,7 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
             metrics calculated at `state.timestep`. All metrics assumed to be shaped
             (..., num_objects=1) unless specified in the metrics implementation.
         """
-        metric_dict = metrics.run_metrics(state, self.config.metrics)
+        metric_dict = metrics.run_metrics(state, self.config.metrics, precomputed_metrics)
         # The following metrics need to be selected by one hot. For each, we look
         # if they're in the metric_dict, and if so, we select by onehot and replace
         # the metric in the original metric dictionary.
@@ -318,7 +331,8 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
         return metric_dict
 
     @jax.named_scope("PlanningAgentEnvironment.reward")
-    def reward(self, state: PlanningSimState, action: datatypes.Action) -> jax.Array:
+    def reward(self, state: PlanningSimState, action: datatypes.Action, return_metrics: bool = False
+    ) -> Union[jax.Array, Tuple[jax.Array, dict[str, abstract_metric.MetricResult]]]:
         """Computes the reward for a transition.
 
         Args:
@@ -333,12 +347,24 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
         # Shape: (..., num_objects).
         if self.config.compute_reward:
             agent_mask = datatypes.get_control_mask(state.object_metadata, self.config.controlled_object)
-            multi_agent_reward = self._reward_function.compute(state, action, agent_mask)
+            out = self._reward_function.compute(state, action, agent_mask, return_metrics)
+            if return_metrics:
+                multi_agent_reward, metrics = out
+            else:
+              multi_agent_reward = out
             # After onehot, shape: (...)
-            return datatypes.select_by_onehot(multi_agent_reward, state.object_metadata.is_sdc, keepdims=False)
+            multi_agent_reward_oneshot = datatypes.select_by_onehot(multi_agent_reward, state.object_metadata.is_sdc, keepdims=False)
+            if return_metrics:
+                return multi_agent_reward_oneshot, metrics
+            else:
+                return multi_agent_reward_oneshot
         else:
             reward_spec = specs.Array(shape=(), dtype=jnp.float32)
-            return jnp.zeros(state.shape + reward_spec.shape, dtype=reward_spec.dtype)
+            rewards = jnp.zeros(state.shape + reward_spec.shape, dtype=reward_spec.dtype)
+            if return_metrics:
+                return rewards, {}
+            else:
+                return rewards
 
     def action_spec(self) -> datatypes.Action:
         data_spec = self.dynamics.action_spec()  # rank 1
@@ -365,9 +391,8 @@ class PlanningAgentEnvironment(abstract_environment.AbstractEnvironment):
         Returns:
           The next simulation state after taking an action of shape (...).
         """
-                
         planning_agent_action = self._planning_agent_dynamics.compute_update(
-            action, state.current_sim_trajectory
+            action, state.current_sim_trajectory, state.dynamics_params
         ).as_action()
         planning_agent_controlled = state.object_metadata.is_sdc
 

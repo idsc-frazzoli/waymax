@@ -17,6 +17,7 @@
 Delta dynamics modeled can be applied in global coordinates or in the local
 (object) coordinate frame.
 """
+from typing import Optional
 from dm_env import specs
 import jax
 import jax.numpy as jnp
@@ -70,6 +71,7 @@ class DeltaGlobal(abstract_dynamics.DynamicsModel):
       self,
       action: datatypes.Action,
       trajectory: datatypes.Trajectory,
+      dynamics_params: Optional[datatypes.DynamicsParams] = None,
   ) -> datatypes.TrajectoryUpdate:
     """Computes the pose and velocity updates at timestep.
 
@@ -82,6 +84,7 @@ class DeltaGlobal(abstract_dynamics.DynamicsModel):
       The trajectory update for timestep of shape
         (..., num_objects, num_timesteps=1).
     """
+    del dynamics_params
     dx, dy, dyaw = jnp.split(action.data, 3, axis=-1)
     vel_x = dx / self._dt
     vel_y = dy / self._dt
@@ -166,6 +169,7 @@ class DeltaLocal(DeltaGlobal):
       self,
       action: datatypes.Action,
       trajectory: datatypes.Trajectory,
+      dynamics_params: Optional[datatypes.DynamicsParams] = None,
   ) -> datatypes.TrajectoryUpdate:
     """Converts to global actions and calls DeltaGlobal.compute_update.
 
@@ -178,6 +182,7 @@ class DeltaLocal(DeltaGlobal):
       The trajectory update for timestep of shape
         (..., num_objects, num_timesteps=1).
     """
+    del dynamics_params
     transf_yaw = trajectory.yaw[..., 0]
     transf_valid = trajectory.valid[..., 0:1]
 

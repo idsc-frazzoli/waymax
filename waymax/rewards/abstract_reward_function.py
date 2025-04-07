@@ -14,9 +14,11 @@
 
 """Abstract reward function definition."""
 import abc
+from typing import Tuple, Union
 
 import jax
 
+from waymax.metrics import abstract_metric
 from waymax import datatypes
 
 
@@ -29,7 +31,8 @@ class AbstractRewardFunction(abc.ABC):
       simulator_state: datatypes.SimulatorState,
       action: datatypes.Action,
       agent_mask: jax.Array,
-  ) -> jax.Array:
+      return_metrics: bool = False,
+  ) -> Union[jax.Array, Tuple[jax.Array, dict[str, abstract_metric.MetricResult]]]:
     """Computes rewards for every agent given a sim state and action.
 
     Args:

@@ -34,12 +34,12 @@ from waymax.visualization import viz
 
 import matplotlib.pyplot as plt
 
-GokartObs = typing.TypeVar("GokartObs")
+GokartObsStorage = typing.TypeVar("GokartObsStorage")
 
 
 def create_video_simulator_state(
     state: datatypes.SimulatorState,
-    obs: GokartObs | None = None,
+    obs: GokartObsStorage | None = None,
     video_path: str | None = None,
     use_log_traj: bool = True,
     n_steps: int = 10,
@@ -102,8 +102,12 @@ class VideoPlotter:
         self.context_lines = None
         self.overlap_lines = None
         self.reference_lines = None
-        self.rays_lines = None
-        self.text = None
+        self.obs_distance_rays_lines = None
+        self.obs_future_track_lines = None
+        self.obs_prev_poses_lines = None
+        self.action_steering_angle_lines = None
+        self.text_id = None
+        self.text_params = None
         self.roadgraph_lines_dict = None
 
         self.name_trajectory_lines = "trajectory_lines"
@@ -128,7 +132,7 @@ class VideoPlotter:
     def plot_sequence_simulator_state(
         self,
         state: datatypes.SimulatorState,
-        obs: GokartObs | None,
+        obs: GokartObsStorage | None,
         use_log_traj: bool = True,
         n_steps: int = 10,
         interval: int = 100,
@@ -161,22 +165,27 @@ class VideoPlotter:
             if len(state.shape) != 1:
                 raise ValueError(f"Expecting one batch dimension, got {len(state.shape)}")
             state = viz._index_pytree(state, batch_idx)
-            obs = viz._index_pytree(obs, batch_idx)
+            if obs is not None:
+                obs.observations = viz._index_pytree(obs.observations, batch_idx)
 
         if self.video_path is not None:
 
             def animate_step(
                 i: int,
                 state: datatypes.GoKartSimState,
-                obs: GokartObs | None,
+                obs: GokartObsStorage | None,
                 use_log_traj: bool,
                 highlight_obj: waymax_config.ObjectType,
                 ref: bool,
             ) -> Iterable[matplotlib.lines.Line2D]:
                 state = state.replace(timestep=i)
-                obs_t = operations.dynamic_slice(obs, i, 1, axis=0) if obs is not None else None
+                if obs is not None:
+                    obs_t = obs.replace(
+                        observations=operations.dynamic_slice(obs.observations, i, 1, axis=0))
+                else:
+                    obs_t = None
 
-                self.plot_simulator_state(state, use_log_traj, highlight_obj, ref, obs)
+                self.plot_simulator_state(state, use_log_traj, highlight_obj, ref, obs_t)
 
                 artists = []
                 for line in [
@@ -184,14 +193,19 @@ class VideoPlotter:
                     self.context_lines,
                     self.overlap_lines,
                     self.reference_lines,
-                    self.rays_lines,
+                    self.obs_distance_rays_lines,
+                    self.obs_future_track_lines,
+                    self.obs_prev_poses_lines,
+                    self.action_steering_angle_lines,
                 ]:
                     if line is not None:
                         artists.extend(line)
                 if not self.plot_last_history_only and self.history_lines is not None:
                     artists.extend(self.history_lines)
-                if self.text is not None:
-                    artists.append(self.text)
+                if self.text_id is not None:
+                    artists.append(self.text_id)
+                if self.text_params is not None:
+                    artists.append(self.text_params)
 
                 return artists
 
@@ -217,7 +231,11 @@ class VideoPlotter:
                 self.ax_background = self.fig.canvas.copy_from_bbox(self.ax.bbox)
             for i in range(n_steps):
                 state = state.replace(timestep=i)
-                obs_t = operations.dynamic_slice(obs, i, 1, axis=0) if obs is not None else None
+                if obs is not None:
+                    obs_t = obs.replace(
+                        observations=operations.dynamic_slice(obs.observations, i, 1, axis=0))
+                else:
+                    obs_t = None
                 self.plot_simulator_state(state, obs_t, use_log_traj, highlight_obj, ref)
                 img = self.img_from_fig(close_fig=False, clear_fig=False, blit=blit)
                 imgs.append(img)
@@ -229,7 +247,7 @@ class VideoPlotter:
     def plot_simulator_state(
         self,
         state: datatypes.SimulatorState,
-        obs: GokartObs | None = None,
+        obs: GokartObsStorage | None = None,
         use_log_traj: bool = True,
         highlight_obj: waymax_config.ObjectType = waymax_config.ObjectType.SDC,
         ref: bool = False,
@@ -281,8 +299,13 @@ class VideoPlotter:
                     traj_5dof[valid_controlled][::5, 1],
                 )
 
-        if obs is not None:
+        if self.viz_config.viz_obs and obs is not None:
             self.plot_obs(traj=traj, timestep=state.timestep, obs=obs)
+            
+        if self.viz_config.viz_actions:
+            self.plot_actions(traj=traj, timestep=state.timestep, state=state)
+            
+        self.plot_params(traj=traj, timestep=state.timestep, state=state)
 
         # 2. Plots road graph elements.
         # assume roadgraph points do not change over time. Plot only once.
@@ -319,14 +342,14 @@ class VideoPlotter:
         self,
         traj: datatypes.Trajectory,
         timestep: int,
-        obs: GokartObs,
+        obs: GokartObsStorage,
     ) -> None:
 
         # plot rays
         position = traj.xy[0, timestep, :]
         yaw = traj.yaw[0, timestep]
         # rays_length[0, timestep, :]
-        self.plot_numpy_rays(
+        self.plot_distance_rays_obs(
             position,
             yaw,
             color=np.array([1.0, 0.65, 0.0]),
@@ -334,6 +357,110 @@ class VideoPlotter:
             rays_angles_base=obs._angles_rays,
             alpha=0.9,
         )
+        
+        # plot future centerline
+        if hasattr(obs, "future_track_x") and hasattr(obs, "future_track_y"):
+            self.plot_future_track_obs(
+                position,
+                yaw,
+                color=np.array([0.0, 1.0, 0.0]),
+                rel_future_track_x=obs.future_track_x.squeeze(),
+                rel_future_track_y=obs.future_track_y.squeeze(),
+                alpha=0.9,
+            )
+            
+        # plot previous poses
+        if hasattr(obs, "prev_pose_x") and hasattr(obs, "prev_pose_y") \
+                and hasattr(obs, "prev_pose_yaw"):
+            if obs.prev_pose_x.squeeze().shape[0] > 0:
+                self.plot_previous_poses_obs(
+                    position,
+                    yaw,
+                    color=np.array([1.0, 0.0, 0.0]),
+                    rel_prev_poses_x=obs.prev_pose_x.squeeze(),
+                    rel_prev_poses_y=obs.prev_pose_y.squeeze(),
+                    rel_prev_poses_yaw=obs.prev_pose_yaw.squeeze(),
+                    alpha=0.9,
+                )
+            
+    def plot_actions(
+        self,
+        traj: datatypes.GokartTrajectory,
+        timestep: int,
+        state: datatypes.GoKartSimState,
+    ):
+        position = traj.xy[0, timestep, :]
+        yaw = traj.yaw[0, timestep]
+        actions = state.actions_history
+        steering_angle = actions.steering_angle[0, timestep]
+        self.plot_steering_angle_action(
+            position,
+            yaw,
+            steering_angle=steering_angle,
+            color=np.array([0.0, 0.0, 1.0]),
+            alpha=0.9,
+        )
+        
+    def plot_params(
+        self,
+        traj: datatypes.GokartTrajectory,
+        timestep: int,
+        state: datatypes.GoKartSimState,
+    ):
+
+        if hasattr(state, "conditioning_params"):
+            self.plot_conditioning_max_vel_x(
+                max_vel_x=state.conditioning_params.max_vel_x[..., 0],
+            )
+        
+    def plot_conditioning_max_vel_x(
+        self,
+        max_vel_x: float,
+    ):
+        # plot text as info on the corner of the axis plot
+        text = f"max velx:{np.array(max_vel_x)[0]:.1f}"
+        text_pos = (0.8, 0.95)
+        if self.text_params is not None:
+            self.text_params.set_text(text)
+            self.text_params.set_position(text_pos)
+        else:
+            self.text_params = self.ax.text(
+                text_pos[0],
+                text_pos[1],
+                text,
+                fontsize=10,
+                bbox=dict(facecolor='white', alpha=0.9),
+                transform=self.ax.transAxes,
+                zorder=10,
+            )
+        
+    def plot_steering_angle_action(
+        self,
+        position: np.ndarray,
+        yaw: np.ndarray,
+        steering_angle: np.ndarray,
+        color: np.ndarray,
+        alpha: Optional[float] = 1.0,
+    ):
+        len_arrow = 0.8        
+        offset_front_car = 0.75
+
+        start_arrow = position + offset_front_car * np.array([np.cos(yaw), np.sin(yaw)])
+
+        dx, dy = len_arrow * np.array([np.cos(yaw + steering_angle), np.sin(yaw + steering_angle)])
+        if self.action_steering_angle_lines is not None:
+            self.action_steering_angle_lines[0].set_data(
+                x=start_arrow[0], y=start_arrow[1], dx=dx, dy=dy)
+        else:
+            self.action_steering_angle_lines = (self.ax.arrow(
+                start_arrow[0], start_arrow[1],
+                dx, dy,
+                width=0.1,
+                zorder=5,
+                color=color,
+                alpha=alpha,
+            ), )
+            
 
     def plot_trajectory(
         self,
@@ -379,12 +506,12 @@ class VideoPlotter:
             for i in range(num_obj):
                 if not traj.valid[i, time_idx]:
                     continue
-                if self.text is not None:
+                if self.text_id is not None:
                     if num_obj != 1:
-                        self.text.set_text(f"{indices[i]}")
-                    self.text.set_position((traj_5dof[i, time_idx, 0] - 2, traj_5dof[i, time_idx, 1] + 2))
+                        self.text_id.set_text(f"{indices[i]}")
+                    self.text_id.set_position((traj_5dof[i, time_idx, 0] - 2, traj_5dof[i, time_idx, 1] + 2))
                 else:
-                    self.text = self.ax.text(
+                    self.text_id = self.ax.text(
                         traj_5dof[i, time_idx, 0] - 2,
                         traj_5dof[i, time_idx, 1] + 2,
                         f"{indices[i]}",
@@ -571,7 +698,7 @@ class VideoPlotter:
 
         setattr(self, line_name, lines)
 
-    def plot_numpy_rays(
+    def plot_distance_rays_obs(
         self,
         position: np.ndarray,
         yaw: np.ndarray,
@@ -581,7 +708,7 @@ class VideoPlotter:
         alpha: Optional[float] = 1.0,
     ) -> None:
         """
-        Plots rays originating from a given position and orientation.
+        Plots observation of distannce rays.
 
         Args:
             position: Array of shape (2,), representing the start position (x, y) of the rays.
@@ -601,17 +728,115 @@ class VideoPlotter:
         plot_xy[:, ::2] = position[:, None]
         plot_xy[:, 1::2] = rays
 
-        if self.rays_lines is not None:
-            self.rays_lines[0].set_data(plot_xy[0], plot_xy[1])
+        if self.obs_distance_rays_lines is not None:
+            self.obs_distance_rays_lines[0].set_data(plot_xy[0], plot_xy[1])
         else:
-            self.rays_lines = self.ax.plot(
+            self.obs_distance_rays_lines = self.ax.plot(
                 plot_xy[0],
                 plot_xy[1],
                 ":",
                 color=color,
                 alpha=alpha,
                 zorder=4,
-                linewidth=1.0,
+                linewidth=0.5,
+                markersize=0.5,
+            )
+            
+    def plot_future_track_obs(
+        self,
+        position: np.ndarray,
+        yaw: np.ndarray,
+        color: np.ndarray,
+        rel_future_track_x: np.ndarray,
+        rel_future_track_y: np.ndarray,
+        alpha: Optional[float] = 1.0,
+    ):
+        """
+        Plots observation of future track points.
+
+        Args:
+            position: Array of shape (2,), representing the start position (x, y) of the gokart.
+            yaw: Array of shape (1,), representing the orientation angle of the gokart.
+            color: Array of shape (3,), representing the RGB color for future track points.
+            rel_future_track_x: Array of shape (num_points,), representing the x-coordinates
+                                of the future track relative to the gokart.
+            rel_future_track_y: Array of shape (num_points,), representing the y-coordinates
+                                of the future track relative to the gokart.
+            alpha: Alpha value for drawing, where 0 is fully transparent.
+        """
+        rel_future_track = np.array([rel_future_track_x, rel_future_track_y])
+        future_track = position[:, None] + np.dot(geometry.rotation_matrix_2d(yaw), rel_future_track)
+
+        if self.obs_future_track_lines is not None:
+            self.obs_future_track_lines[0].set_data(future_track[0], future_track[1])
+        else:
+            self.obs_future_track_lines = self.ax.plot(
+                future_track[0],
+                future_track[1],
+                "o-",
+                color=color,
+                alpha=alpha,
+                zorder=3,
+                linewidth=0.75,
+                markersize=0.75,
+            )
+            
+    def plot_previous_poses_obs(
+        self,
+        position: np.ndarray,
+        yaw: np.ndarray,
+        color: np.ndarray,
+        rel_prev_poses_x: np.ndarray,
+        rel_prev_poses_y: np.ndarray,
+        rel_prev_poses_yaw: np.ndarray,
+        alpha: Optional[float] = 1.0,
+    ):
+        """
+        Plots observation of previous poses.
+
+        Args:
+            position: Array of shape (2,), representing the start position (x, y) of the gokart.
+            yaw: Array of shape (1,), representing the orientation angle of the gokart.
+            color: Array of shape (3,), representing the RGB color for future track points.
+            rel_prev_poses: Array of shape (num_poses, 3), representing the x, y, yaw
+                            of the previous poses relative to the gokart.
+            alpha: Alpha value for drawing, where 0 is fully transparent.
+        """
+        rel_prev_positions = np.array([rel_prev_poses_x, rel_prev_poses_y])
+        prev_positions = position[:, None] + np.dot(geometry.rotation_matrix_2d(yaw), rel_prev_positions)
+        prev_yaws = yaw + rel_prev_poses_yaw
+        
+        # draw heading arrows for previous poses
+        len_arrow = 0.4
+        angle_cap_arrow = np.pi / 7
+        start_arrow = np.array(prev_positions)
+        end_arrow = start_arrow + len_arrow * np.array([np.cos(prev_yaws), np.sin(prev_yaws)])
+        left_cap_arrow = start_arrow + len_arrow/2 * np.array(
+            [np.cos(prev_yaws + angle_cap_arrow), np.sin(prev_yaws + angle_cap_arrow)])
+        right_cap_arrow = start_arrow + len_arrow/2 * np.array(
+            [np.cos(prev_yaws - angle_cap_arrow), np.sin(prev_yaws - angle_cap_arrow)])
+        
+        heading_arrows_x = [start_arrow[0, :], end_arrow[0, :], left_cap_arrow[0, :], end_arrow[0, :], right_cap_arrow[0, :]]
+        heading_arrows_y = [start_arrow[1, :], end_arrow[1, :], left_cap_arrow[1, :], end_arrow[1, :], right_cap_arrow[1, :]]
+        
+        heading_arrows_x = [[start, end, cap1, end2, cap2] for start, end, cap1, end2, cap2 in zip(*heading_arrows_x)]
+        heading_arrows_y = [[start, end, cap1, end2, cap2] for start, end, cap1, end2, cap2 in zip(*heading_arrows_y)]
+        
+        lines_args = []
+        for arrow_x, arrow_y in zip(heading_arrows_x, heading_arrows_y):
+            lines_args.extend([arrow_x, arrow_y])
+
+        if self.obs_prev_poses_lines is not None:
+            for idx in range(len(self.obs_prev_poses_lines)):
+                self.obs_prev_poses_lines[idx].set_data(*lines_args[2 * idx : 2 * idx + 2])
+        else:
+            self.obs_prev_poses_lines = self.ax.plot(
+                *lines_args,
+                "-",
+                color=color,
+                alpha=alpha,
+                zorder=3,
+                linewidth=0.75,
             )
 
     def plot_roadgraph_points(
@@ -660,13 +885,18 @@ class VideoPlotter:
                 self.context_lines,
                 self.overlap_lines,
                 self.reference_lines,
-                self.rays_lines,
+                self.obs_distance_rays_lines,
+                self.obs_future_track_lines,
+                self.obs_prev_poses_lines,
+                self.action_steering_angle_lines,
             ]:
                 if lines is not None:
                     for line in lines:
                         self.ax.draw_artist(line)
-            if self.text is not None:
-                self.ax.draw_artist(self.text)
+            if self.text_id is not None:
+                self.ax.draw_artist(self.text_id)
+            if self.text_params is not None:
+                self.ax.draw_artist(self.text_params)
             self.fig.canvas.blit(self.ax.bbox)
         else:
             self.fig.canvas.draw()

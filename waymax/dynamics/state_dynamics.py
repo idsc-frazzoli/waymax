@@ -13,6 +13,7 @@
 # limitations under the License.
 
 """Dynamics model for setting state in global coordinates."""
+from typing import Optional
 import jax
 import numpy as np
 from dm_env import specs
@@ -41,6 +42,7 @@ class StateDynamics(abstract_dynamics.DynamicsModel):
       self,
       action: datatypes.Action,
       trajectory: datatypes.Trajectory,
+      dynamics_params: Optional[datatypes.DynamicsParams] = None,
   ) -> datatypes.TrajectoryUpdate:
     """Computes the pose and velocity updates at timestep.
 
@@ -56,6 +58,7 @@ class StateDynamics(abstract_dynamics.DynamicsModel):
       The trajectory update for timestep.
     """
     del trajectory  # Not used.
+    del dynamics_params  # Not used.
     return datatypes.TrajectoryUpdate(
         x=action.data[..., 0:1],
         y=action.data[..., 1:2],
@@ -113,6 +116,7 @@ class GoKartStateDynamics(StateDynamics):
       self,
       action: datatypes.Action,
       trajectory: datatypes.GokartTrajectory,
+      dynamics_params: Optional[datatypes.GokartDynamicsParams] = None,
   ) -> datatypes.GoKartTrajectoryUpdate:
     """Computes the pose and velocity updates at timestep.
 
@@ -128,6 +132,7 @@ class GoKartStateDynamics(StateDynamics):
       The trajectory update for timestep.
     """
     del trajectory  # Not used.
+    del dynamics_params  # Not used.
     return datatypes.GoKartTrajectoryUpdate(
         x=action.data[..., 0:1],
         y=action.data[..., 1:2],

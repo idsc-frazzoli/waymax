@@ -168,6 +168,7 @@ class GokartAction:
     steering_angle: jax.Array # (..., num_objects, 1)
     acc_left: jax.Array # (..., num_objects, 1)
     acc_right: jax.Array # (..., num_objects, 1)
+    valid: jax.Array # (..., num_objects, 1)
 
     @property
     def shape(self) -> tuple[int, ...]:
@@ -207,6 +208,7 @@ class GokartAction:
             steering_angle=jnp.zeros(shape, jnp.float32),
             acc_left=jnp.zeros(shape, jnp.float32),
             acc_right=jnp.zeros(shape, jnp.float32),
+            valid=jnp.zeros(shape, jnp.bool_),
         )
 
     def __eq__(self, other: Any) -> bool:
@@ -222,6 +224,16 @@ class GokartAction:
             steering_angle=self.steering_angle.at[..., timestep].set(action.data[0]),
             acc_left=self.acc_left.at[..., timestep].set(action.data[1]),
             acc_right=self.acc_right.at[..., timestep].set(action.data[2]),
+            valid=self.valid.at[..., timestep].set(action.valid),
+        )
+        
+    def set_actions_from_array(self, action: jax.Array) -> "GokartAction":
+        """Return a new action history from an array of actions."""
+        return self.replace(
+            steering_angle=action[..., 0],
+            acc_left=action[..., 1],
+            acc_right=action[..., 2],
+            valid=jnp.ones_like(action[..., 0], jnp.bool_),
         )
 
     def validate(self):
@@ -231,6 +243,7 @@ class GokartAction:
                 self.steering_angle,
                 self.acc_left,
                 self.acc_right,
+                self.valid,
             ]
         )
         chex.assert_type(
@@ -238,10 +251,12 @@ class GokartAction:
                 self.steering_angle,
                 self.acc_left,
                 self.acc_right,
+                self.valid,
             ],
             [
                 jnp.float32,
                 jnp.float32,
                 jnp.float32,
+                jnp.bool_,
             ],
         )

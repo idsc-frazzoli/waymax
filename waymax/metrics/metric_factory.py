@@ -15,6 +15,8 @@
 """Utility function that runs all metrics according to an environment config."""
 from collections.abc import Iterable
 
+import jax
+
 from waymax import config as _config, datatypes
 from waymax.metrics import abstract_metric, comfort, imitation, overlap, roadgraph, route
 
@@ -44,6 +46,7 @@ _METRICS_REGISTRY: dict[str, abstract_metric.AbstractMetric] = {
 def run_metrics(
     simulator_state: datatypes.SimulatorState,
     metrics_config: _config.MetricsConfig,
+    precomputed_metrics: dict[str, abstract_metric.MetricResult] = None,
 ) -> dict[str, abstract_metric.MetricResult]:
     """Runs all metrics with config flags set to True.
 
@@ -60,7 +63,10 @@ def run_metrics(
     results = {}
     for metric_name in metrics_config.metrics_to_run:
         if metric_name in _METRICS_REGISTRY:
-            results[metric_name] = _METRICS_REGISTRY[metric_name].compute(simulator_state)
+            if precomputed_metrics is not None and metric_name in precomputed_metrics:
+                results[metric_name] = precomputed_metrics[metric_name]
+            else:
+                results[metric_name] = _METRICS_REGISTRY[metric_name].compute(simulator_state)
         else:
             raise ValueError(f"Metric {metric_name} not registered.")
 
