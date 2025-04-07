@@ -372,15 +372,16 @@ class VideoPlotter:
         # plot previous poses
         if hasattr(obs, "prev_pose_x") and hasattr(obs, "prev_pose_y") \
                 and hasattr(obs, "prev_pose_yaw"):
-            self.plot_previous_poses_obs(
-                position,
-                yaw,
-                color=np.array([1.0, 0.0, 0.0]),
-                rel_prev_poses_x=obs.prev_pose_x.squeeze(),
-                rel_prev_poses_y=obs.prev_pose_y.squeeze(),
-                rel_prev_poses_yaw=obs.prev_pose_yaw.squeeze(),
-                alpha=0.9,
-            )
+            if obs.prev_pose_x.squeeze().shape[0] > 0:
+                self.plot_previous_poses_obs(
+                    position,
+                    yaw,
+                    color=np.array([1.0, 0.0, 0.0]),
+                    rel_prev_poses_x=obs.prev_pose_x.squeeze(),
+                    rel_prev_poses_y=obs.prev_pose_y.squeeze(),
+                    rel_prev_poses_yaw=obs.prev_pose_yaw.squeeze(),
+                    alpha=0.9,
+                )
             
     def plot_actions(
         self,
