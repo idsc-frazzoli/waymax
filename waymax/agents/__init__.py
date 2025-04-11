@@ -19,6 +19,7 @@ from waymax.agents.actor_core import WaymaxActorCore
 from waymax.agents.actor_core import WaymaxActorOutput
 from waymax.agents.agent_builder import create_sim_agents_from_config
 from waymax.agents.constant_speed import create_constant_speed_actor
+from waymax.agents.dummy_agent import create_dummy_agent
 from waymax.agents.expert import create_expert_actor
 from waymax.agents.sim_agent import FrozenSimPolicy
 from waymax.agents.sim_agent import SimAgentActor
