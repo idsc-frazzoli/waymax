@@ -176,7 +176,7 @@ class VideoPlotter:
                 state = state.replace(timestep=i)
                 obs_t = operations.dynamic_slice(obs, i, 1, axis=0) if obs is not None else None
 
-                self.plot_simulator_state(state, use_log_traj, highlight_obj, ref, obs)
+                self.plot_simulator_state(state, obs_t, use_log_traj, highlight_obj, ref)
 
                 artists = []
                 for line in [
@@ -198,7 +198,7 @@ class VideoPlotter:
             partial_animate_step = partial(
                 animate_step,
                 state=state,
-                obs=obs_t,
+                obs=obs,
                 use_log_traj=use_log_traj,
                 highlight_obj=highlight_obj,
                 ref=ref,
