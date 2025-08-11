@@ -16,4 +16,5 @@ def get_reward_function_from_config(config: _config.LinearCombinationRewardConfi
     reward_class = REWARDS_CONFIG2REWARD.get(type(config))
     if reward_class is None:
         raise ValueError(f"Unsupported reward config: {config}")
+    
     return reward_class(config)
