@@ -164,6 +164,8 @@ class VideoPlotter:
             obs = viz._index_pytree(obs, batch_idx)
 
         if self.video_path is not None:
+            print(f"🎬 Creating video with {n_steps} frames...")
+            print(f"📁 Output path: {self.video_path}")
 
             def animate_step(
                 i: int,
@@ -173,6 +175,12 @@ class VideoPlotter:
                 highlight_obj: waymax_config.ObjectType,
                 ref: bool,
             ) -> Iterable[matplotlib.lines.Line2D]:
+                # Print progress every 10% of frames or every 10 frames, whichever is smaller
+                progress_interval = max(1, min(10, n_steps // 10))
+                if i % progress_interval == 0 or i == n_steps - 1:
+                    progress_pct = (i + 1) / n_steps * 100
+                    print(f"  📊 Frame {i + 1}/{n_steps} ({progress_pct:.1f}%)")
+                
                 state = state.replace(timestep=i)
                 obs_t = operations.dynamic_slice(obs, i, 1, axis=0) if obs is not None else None
 
@@ -207,20 +215,31 @@ class VideoPlotter:
                 self.fig, partial_animate_step, frames=n_steps, repeat=False, interval=interval, blit=True
             )
 
+            print("💾 Saving video to disk...")
             ani.save(self.video_path, writer="ffmpeg")
+            print(f"✅ Video saved successfully to {self.video_path}")
 
         else:
+            print(f"🖼️ Generating {n_steps} frames in memory...")
             # FIXME: blit = True is 2-3x faster than blit = False, but for now the axis ticks will not update correctly
             blit = True
             if blit:
                 self.fig.canvas.draw()
                 self.ax_background = self.fig.canvas.copy_from_bbox(self.ax.bbox)
             for i in range(n_steps):
+                # Print progress every 10% of frames or every 10 frames, whichever is smaller
+                progress_interval = max(1, min(10, n_steps // 10))
+                if i % progress_interval == 0 or i == n_steps - 1:
+                    progress_pct = (i + 1) / n_steps * 100
+                    print(f"  📊 Frame {i + 1}/{n_steps} ({progress_pct:.1f}%)")
+                
                 state = state.replace(timestep=i)
                 obs_t = operations.dynamic_slice(obs, i, 1, axis=0) if obs is not None else None
                 self.plot_simulator_state(state, obs_t, use_log_traj, highlight_obj, ref)
                 img = self.img_from_fig(close_fig=False, clear_fig=False, blit=blit)
                 imgs.append(img)
+            
+            print("✅ All frames generated successfully in memory")
 
         self.close_fig()
 
@@ -255,8 +274,21 @@ class VideoPlotter:
 
         # 1. Plots trajectory.
         traj = state.log_trajectory if use_log_traj else state.sim_trajectory
+
+        # print("DEBUG: Shape of trajectory:", traj.shape)  # (4, 1000)
+        # print("DEBUG: Object types:", state.object_metadata.object_types)
+        # print("DEBUG: is_sdc:", state.object_metadata.is_sdc)
+        # print("DEBUG: is_controlled:", state.object_metadata.is_controlled)
+        # print("DEBUG: Object positions at current timestep:")
+        # for i in range(traj.num_objects):
+        #     print(f"  Object {i}: pos=({traj.x[i, state.timestep]:.3f}, {traj.y[i, state.timestep]:.3f}), "
+        #           f"yaw={traj.yaw[i, state.timestep]:.3f}, valid={traj.valid[i, state.timestep]}")
+
         indices = np.arange(traj.num_objects) if self.viz_config.show_agent_id else None
         is_controlled = datatypes.get_control_mask(state.object_metadata, highlight_obj)
+        
+        # print("DEBUG: is_controlled mask:", is_controlled)
+        
         self.plot_trajectory(
             traj, is_controlled, time_idx=state.timestep, indices=indices
         )  # pytype: disable=wrong-arg-types  # jax-ndarray
@@ -414,13 +446,31 @@ class VideoPlotter:
         valid_controlled = is_controlled[:, np.newaxis] & valid
         valid_context = ~is_controlled[:, np.newaxis] & valid
 
+        # DEBUG: Check what objects are being considered for plotting (solo cuando hay colisiones)
+        if np.any(~is_controlled & valid[:, time_idx]):  # Solo si hay objetos de contexto válidos
+            print(f"🔍 DEBUG timestep {time_idx}: {np.sum(~is_controlled & valid[:, time_idx])} context objects")
+
         num_obj = traj_5dof.shape[0]
         time_indices = np.tile(np.arange(traj_5dof.shape[1])[np.newaxis, :], (num_obj, 1))
         # Shrinks bounding_boxes for non-current steps.
         traj_5dof[time_indices != time_idx, 2:4] /= 10
+        
+        # Check what will be plotted in each category
+        controlled_mask = (time_indices >= time_idx) & valid_controlled
+        # Para objetos de contexto (obstáculos estáticos), solo mostrar el timestep actual
+        context_mask = (time_indices == time_idx) & valid_context  # SOLO timestep actual, no historial
+        
+        controlled_bboxes = traj_5dof[controlled_mask]
+        context_bboxes = traj_5dof[context_mask]
+        
+        # Solo mostrar debug de contexto cuando hay obstáculos y cada cierto tiempo
+        if context_bboxes.shape[0] > 0 and time_idx % 100 == 0:  # Solo cada 100 timesteps
+            print(f"  🎯 Context bboxes to plot: {context_bboxes.shape[0]}")
+            print(f"  📦 First context bbox: pos=({context_bboxes[0][0]:.1f}, {context_bboxes[0][1]:.1f})")
+        
         self.plot_numpy_bounding_boxes(
             self.name_trajectory_lines,
-            bboxes=traj_5dof[(time_indices >= time_idx) & valid_controlled],
+            bboxes=controlled_bboxes,
             color=color.COLOR_DICT["controlled"],
             as_center_pts=controlled_next_steps_as_center_pts,
             center_pts_from_idx=1 if controlled_next_steps_as_center_pts else 0,
@@ -440,7 +490,8 @@ class VideoPlotter:
 
         self.plot_numpy_bounding_boxes(
             self.name_context_lines,
-            bboxes=traj_5dof[(time_indices >= time_idx) & valid_context],
+            bboxes=context_bboxes,
+            # color=np.array([1.0, 0.0, 1.0]),  # MAGENTA BRILLANTE para debug
             color=color.COLOR_DICT["context"],
             label="context" if add_label else None,
         )
@@ -454,9 +505,16 @@ class VideoPlotter:
         # (A,)
         overlap_mask = np.any(overlap_mask_matrix, axis=1)
 
+        # DEBUG: Check overlaps - solo cuando hay colisiones
+        overlapping_bboxes = traj_5dof[:, time_idx][overlap_mask & valid[:, time_idx]]
+        if overlapping_bboxes.shape[0] > 0:
+            print(f"  🚨 COLLISION at timestep {time_idx}! {overlapping_bboxes.shape[0]} overlapping objects")
+            for i, bbox in enumerate(overlapping_bboxes):
+                print(f"    Collision bbox {i}: pos=({bbox[0]:.3f}, {bbox[1]:.3f})")
+
         self.plot_numpy_bounding_boxes(
             self.name_overlap_lines,
-            bboxes=traj_5dof[:, time_idx][overlap_mask & valid[:, time_idx]],
+            bboxes=overlapping_bboxes,
             color=color.COLOR_DICT["overlap"],
             label="overlap" if add_label else None,
         )
@@ -485,6 +543,10 @@ class VideoPlotter:
             while previous indices will be drawn as full bboxes.
           label: String, represents the meaning of the color for different boxes.
         """
+        # DEBUG: Check what we're trying to plot (solo para overlaps)
+        if line_name == "overlap_lines" and bboxes.shape[0] > 0:
+            print(f"🎨 COLLISION! Plotting {bboxes.shape[0]} {line_name} bboxes in color {color}")
+        
         lines = getattr(self, line_name)
         if bboxes.ndim != 2 or bboxes.shape[1] != 5 or color.shape != (3,):
             raise ValueError(
@@ -494,7 +556,7 @@ class VideoPlotter:
             )
 
         if bboxes.shape[0] == 0:
-            return
+            return  # Sin mensaje para casos normales sin bboxes
 
         if as_center_pts and center_pts_from_idx <= 0:
             if lines is not None:
@@ -564,8 +626,9 @@ class VideoPlotter:
                         plot_bboxes_x,
                         plot_bboxes_y,
                         color=color,
-                        zorder=4,
+                        zorder=10,  # Más alto que el default (4) para que aparezca encima
                         alpha=alpha,
+                        linewidth=2.0 if line_name == "context_lines" else 1.0,  # Líneas más gruesas para contexto
                         label=label,
                     )
 
