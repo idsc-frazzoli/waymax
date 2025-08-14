@@ -157,7 +157,10 @@ def compute_signed_distance_object_to_nearest_road_edge_point(
         side of the road, if it is positive, it is considered `offroad`.
       """
     # Shape: (..., num_objects, num_corners=4, 2).
+#     print("DEBUG: Computing signed distance for trajectory with shape:", trajectory.shape)
     bbox_corners = jnp.squeeze(trajectory.bbox_corners, axis=-3)
+
+#     print("DEBUG: BBox corners shape:", bbox_corners.shape)
     # Add in the Z dimension from the current center. This assumption will help
     # disambiguate between different levels of the roadgraph (i.e. under and over
     # passes).
