@@ -32,12 +32,16 @@ class OverlapMetric(abstract_metric.AbstractMetric):
   def compute(
       self, simulator_state: datatypes.SimulatorState
   ) -> abstract_metric.MetricResult:
+    sim_traj = datatypes.select_by_onehot(simulator_state.sim_trajectory, simulator_state.object_metadata.is_sdc)   # Select only the SDC.
+    sim_traj = jax.tree.map(lambda x: jnp.expand_dims(x, axis=0), sim_traj)     # Expand to add batch dimension.
+
     current_object_state = datatypes.dynamic_slice(
-        simulator_state.sim_trajectory,
+        sim_traj,
         simulator_state.timestep,
         1,
         -1,
     )
+
     return self.compute_overlap(current_object_state)
 
   def compute_overlap(
@@ -64,6 +68,15 @@ class OverlapMetric(abstract_metric.AbstractMetric):
     pairwise_overlap = jnp.logical_and(pairwise_overlap, valid)
     num_overlap = jnp.sum(pairwise_overlap, axis=-2)
     overlap_indication = (num_overlap > 0).astype(jnp.float32)
-    return abstract_metric.MetricResult.create_and_validate(
+
+    metric = abstract_metric.MetricResult.create_and_validate(
         overlap_indication, valid[..., 0]
     )
+
+    # Unbatch the metric to remove the batch dimension.
+    metric = metric.replace(
+        value=jnp.squeeze(metric.value, axis=-1),
+        valid=jnp.squeeze(metric.valid, axis=-1),
+    )
+
+    return metric
