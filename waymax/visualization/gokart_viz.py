@@ -164,9 +164,6 @@ class VideoPlotter:
             obs = viz._index_pytree(obs, batch_idx)
 
         if self.video_path is not None:
-            print(f"🎬 Creating video with {n_steps} frames...")
-            print(f"📁 Output path: {self.video_path}")
-
             def animate_step(
                 i: int,
                 state: datatypes.GoKartSimState,
@@ -231,7 +228,7 @@ class VideoPlotter:
                 progress_interval = max(1, min(10, n_steps // 10))
                 if i % progress_interval == 0 or i == n_steps - 1:
                     progress_pct = (i + 1) / n_steps * 100
-                    print(f"  📊 Frame {i + 1}/{n_steps} ({progress_pct:.1f}%)")
+                    print(f"    📊 Frame {i + 1}/{n_steps} ({progress_pct:.1f}%)")
                 
                 state = state.replace(timestep=i)
                 obs_t = operations.dynamic_slice(obs, i, 1, axis=0) if obs is not None else None
@@ -446,12 +443,9 @@ class VideoPlotter:
         valid_controlled = is_controlled[:, np.newaxis] & valid
         valid_context = ~is_controlled[:, np.newaxis] & valid
 
-        # DEBUG: Check what objects are being considered for plotting (solo cuando hay colisiones)
-        if np.any(~is_controlled & valid[:, time_idx]):  # Solo si hay objetos de contexto válidos
-            print(f"🔍 DEBUG timestep {time_idx}: {np.sum(~is_controlled & valid[:, time_idx])} context objects")
-
         num_obj = traj_5dof.shape[0]
         time_indices = np.tile(np.arange(traj_5dof.shape[1])[np.newaxis, :], (num_obj, 1))
+    
         # Shrinks bounding_boxes for non-current steps.
         traj_5dof[time_indices != time_idx, 2:4] /= 10
         
@@ -462,11 +456,6 @@ class VideoPlotter:
         
         controlled_bboxes = traj_5dof[controlled_mask]
         context_bboxes = traj_5dof[context_mask]
-        
-        # Solo mostrar debug de contexto cuando hay obstáculos y cada cierto tiempo
-        if context_bboxes.shape[0] > 0 and time_idx % 100 == 0:  # Solo cada 100 timesteps
-            print(f"  🎯 Context bboxes to plot: {context_bboxes.shape[0]}")
-            print(f"  📦 First context bbox: pos=({context_bboxes[0][0]:.1f}, {context_bboxes[0][1]:.1f})")
         
         self.plot_numpy_bounding_boxes(
             self.name_trajectory_lines,
@@ -491,7 +480,6 @@ class VideoPlotter:
         self.plot_numpy_bounding_boxes(
             self.name_context_lines,
             bboxes=context_bboxes,
-            # color=np.array([1.0, 0.0, 1.0]),  # MAGENTA BRILLANTE para debug
             color=color.COLOR_DICT["context"],
             label="context" if add_label else None,
         )
@@ -505,8 +493,9 @@ class VideoPlotter:
         # (A,)
         overlap_mask = np.any(overlap_mask_matrix, axis=1)
 
-        # DEBUG: Check overlaps - solo cuando hay colisiones
+        # Get the overlapping bounding boxes.
         overlapping_bboxes = traj_5dof[:, time_idx][overlap_mask & valid[:, time_idx]]
+        
         if overlapping_bboxes.shape[0] > 0:
             print(f"  🚨 COLLISION at timestep {time_idx}! {overlapping_bboxes.shape[0]} overlapping objects")
             for i, bbox in enumerate(overlapping_bboxes):
