@@ -277,9 +277,9 @@ class VideoPlotter:
         # print("DEBUG: is_sdc:", state.object_metadata.is_sdc)
         # print("DEBUG: is_controlled:", state.object_metadata.is_controlled)
         # print("DEBUG: Object positions at current timestep:")
-        # for i in range(traj.num_objects):
-        #     print(f"  Object {i}: pos=({traj.x[i, state.timestep]:.3f}, {traj.y[i, state.timestep]:.3f}), "
-        #           f"yaw={traj.yaw[i, state.timestep]:.3f}, valid={traj.valid[i, state.timestep]}")
+        for i in range(traj.num_objects):
+            print(f"  Object {i}: pos=({traj.x[i, state.timestep]:.3f}, {traj.y[i, state.timestep]:.3f}), "
+                  f"yaw={traj.yaw[i, state.timestep]:.3f}, valid={traj.valid[i, state.timestep]}")
 
         indices = np.arange(traj.num_objects) if self.viz_config.show_agent_id else None
         is_controlled = datatypes.get_control_mask(state.object_metadata, highlight_obj)
