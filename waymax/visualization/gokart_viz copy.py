@@ -277,9 +277,9 @@ class VideoPlotter:
         # print("DEBUG: is_sdc:", state.object_metadata.is_sdc)
         # print("DEBUG: is_controlled:", state.object_metadata.is_controlled)
         # print("DEBUG: Object positions at current timestep:")
-        # for i in range(traj.num_objects):
-        #     print(f"  Object {i}: pos=({traj.x[i, state.timestep]:.3f}, {traj.y[i, state.timestep]:.3f}), "
-        #           f"yaw={traj.yaw[i, state.timestep]:.3f}, valid={traj.valid[i, state.timestep]}")
+        for i in range(traj.num_objects):
+            print(f"  Object {i}: pos=({traj.x[i, state.timestep]:.3f}, {traj.y[i, state.timestep]:.3f}), "
+                  f"yaw={traj.yaw[i, state.timestep]:.3f}, valid={traj.valid[i, state.timestep]}")
 
         indices = np.arange(traj.num_objects) if self.viz_config.show_agent_id else None
         is_controlled = datatypes.get_control_mask(state.object_metadata, highlight_obj)
@@ -457,15 +457,6 @@ class VideoPlotter:
         controlled_bboxes = traj_5dof[controlled_mask]
         context_bboxes = traj_5dof[context_mask]
         
-        # Clean the previous overlap lines before plotting new ones.
-        if self.overlap_lines is not None:
-            for line in self.overlap_lines:
-                try:
-                    line.remove()
-                except Exception:
-                    pass
-            self.overlap_lines = None
-
         self.plot_numpy_bounding_boxes(
             self.name_trajectory_lines,
             bboxes=controlled_bboxes,
@@ -601,13 +592,9 @@ class VideoPlotter:
             # Draw bboxes and heading arrow.
             if center_bboxes is not None:
                 if lines is not None:
-                    # print(f"1 [DEBUG set_data] plot_bboxes_x: {plot_bboxes_x}")
-                    # print(f"1 [DEBUG set_data] plot_bboxes_y: {plot_bboxes_y}")
                     lines[0].set_data(plot_bboxes_x, plot_bboxes_y)
                     lines[1].set_data(center_bboxes[:, 0], center_bboxes[:, 1])
                 else:
-                    # print(f"2 [DEBUG new plot] plot_bboxes_x: {plot_bboxes_x}")
-                    # print(f"2 [DEBUG new plot] plot_bboxes_y: {plot_bboxes_y}")
                     lines = self.ax.plot(
                         plot_bboxes_x,
                         plot_bboxes_y,
@@ -622,31 +609,18 @@ class VideoPlotter:
                         label=label,
                     )
             else:
-                # if lines is not None:
-                #     print(f"[3 DEBUG set_data] plot_bboxes_x: {plot_bboxes_x}")
-                #     print(f"[3 DEBUG set_data] plot_bboxes_y: {plot_bboxes_y}")
-                #     lines[0].set_data(plot_bboxes_x, plot_bboxes_y)
-                    
-                # else:
-                # Dibujar cada bounding box por separado para evitar líneas conectadas entre objetos
-                num_bboxes = bboxes.shape[0]
-                lines = []
-                for i in range(num_bboxes):
-                    x = [tl[0, i], tr[0, i], br[0, i], bl[0, i], tl[0, i], cl[0, i], cr[0, i], cf[0, i], cl[0, i]]
-                    y = [tl[1, i], tr[1, i], br[1, i], bl[1, i], tl[1, i], cl[1, i], cr[1, i], cf[1, i], cl[1, i]]
-                    
-                    # if line_name == "context_lines":
-                    #     print(f"context_lines[{i}]: x={x}, y={y}")
-                    line = self.ax.plot(
-                        x,
-                        y,
+                if lines is not None:
+                    lines[0].set_data(plot_bboxes_x, plot_bboxes_y)
+                else:
+                    lines = self.ax.plot(
+                        plot_bboxes_x,
+                        plot_bboxes_y,
                         color=color,
-                        zorder=10,
+                        zorder=10,  # Más alto que el default (4) para que aparezca encima
                         alpha=alpha,
-                        linewidth=2.0 if line_name == "context_lines" else 1.0,
-                        label=label if i == 0 else None,
+                        linewidth=2.0 if line_name == "context_lines" else 1.0,  # Líneas más gruesas para contexto
+                        label=label,
                     )
-                    lines.extend(line)
 
         setattr(self, line_name, lines)
 
