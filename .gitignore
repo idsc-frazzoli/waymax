@@ -1,0 +1,5 @@
+# add pycache
+__pycache__/
+
+# add .egg folder
+*.egg-info/
