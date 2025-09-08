@@ -80,14 +80,18 @@ def center_at_xy(
 
 
 def img_from_fig(fig: matplotlib.figure.Figure) -> np.ndarray:
-  """Returns a [H, W, 3] uint8 np image from fig.canvas.tostring_rgb()."""
+  """Returns a [H, W, 3] uint8 np image from fig.canvas.tostring_argb().
+  NOTE: mpenlington applied fix as suggested in https://github.com/waymo-research/waymax/issues/68 to handle matplotlib 3.10"""
   # Just enough margin in the figure to display xticks and yticks.
   fig.subplots_adjust(
       left=0.08, bottom=0.08, right=0.98, top=0.98, wspace=0.0, hspace=0.0
   )
   fig.canvas.draw()
-  data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-  img = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+  data = np.frombuffer(fig.canvas.tostring_argb(), dtype=np.uint8)
+  r = data[1::4]  # Red channel
+  g = data[2::4]  # Green channel
+  b = data[3::4]  # Blue channel
+  img = np.stack([r, g, b], axis=-1).reshape(fig.canvas.get_width_height()[::-1] + (3,))
   plt.close(fig)
   return img
 
