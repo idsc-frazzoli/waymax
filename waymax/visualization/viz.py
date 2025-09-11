@@ -29,7 +29,7 @@ from waymax.visualization import utils
 
 # The type ids for road graph elements that will be plot in visualization.
 # Please refer to color.py for definition and color associcated.
-_RoadGraphShown = (1, 2, 3, 15, 16, 17, 18, 19)
+_RoadGraphShown = (1, 2, 3, 7, 15, 16, 17, 18, 19)
 _RoadGraphDefaultColor = (0.9, 0.9, 0.9)
 
 
