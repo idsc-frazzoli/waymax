@@ -305,12 +305,13 @@ class GokartTrajectory(Trajectory):
     yaw_rate: jax.Array
     acc_x: jax.Array
     acc_y: jax.Array
+    beta: jax.Array
 
     @classmethod
     @property
     def controllable_fields(cls) -> Sequence[str]:
         """Returns the fields that are controllable."""
-        return ["x", "y", "yaw", "vel_x", "vel_y", "yaw_rate", "acc_x", "acc_y"]
+        return ["x", "y", "yaw", "vel_x", "vel_y", "yaw_rate", "acc_x", "acc_y", "beta"]
 
     @classmethod
     def zeros(cls, shape: Sequence[int]) -> "GokartTrajectory":
@@ -325,6 +326,7 @@ class GokartTrajectory(Trajectory):
             yaw_rate=jnp.zeros(shape, jnp.float32),
             acc_x=jnp.zeros(shape, jnp.float32),
             acc_y=jnp.zeros(shape, jnp.float32),
+            beta=jnp.zeros(shape, jnp.float32),
             valid=jnp.zeros(shape, jnp.bool_),
             length=jnp.zeros(shape, jnp.float32),
             width=jnp.zeros(shape, jnp.float32),
@@ -345,6 +347,7 @@ class GokartTrajectory(Trajectory):
                 self.yaw_rate,
                 self.acc_x,
                 self.acc_y,
+                self.beta,
                 self.valid,
                 self.timestamp_micros,
                 self.length,
@@ -363,6 +366,7 @@ class GokartTrajectory(Trajectory):
                 self.yaw_rate,
                 self.acc_x,
                 self.acc_y,
+                self.beta,
                 self.valid,
                 self.timestamp_micros,
                 self.length,

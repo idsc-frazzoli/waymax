@@ -116,6 +116,11 @@ class BraxWrapper:
   def observe(self, state: datatypes.SimulatorState) -> types.Observation:
     """Computes the observation for the given simulation state."""
     return self._wrapped_env.observe(state)
+  
+  def observe_batched(self, state: datatypes.SimulatorState) -> types.Observation:
+    """Computes the observation for the given simulation state."""
+    print("state shape", state.shape)
+    return self._wrapped_env.observe_batched(state)
 
   def step(self, timestep: TimeStep, action: datatypes.Action) -> TimeStep:
     """Advances simulation by one timestep using the dynamics model.
